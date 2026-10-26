@@ -32,7 +32,9 @@ export async function resolveStaff(email: string): Promise<StaffMember | null> {
     .limit(1);
   if (anyStaff) return null;
 
-  // The first signed-in account becomes admin so the app can be configured.
+  const ownerEmail = process.env.PMR_OWNER_EMAIL?.trim().toLowerCase();
+  if (!ownerEmail || email.trim().toLowerCase() !== ownerEmail) return null;
+
   const [created] = await db
     .insert(schema.staffMembers)
     .values({

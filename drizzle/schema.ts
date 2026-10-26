@@ -22,6 +22,15 @@ export const workOrders = pgTable("work_orders", {
   siteLongitude: doublePrecision("site_longitude").notNull(),
   tcnStart: text("tcn_start").notNull(),
   tcnEnd: text("tcn_end").notNull(),
+  siteId: text("site_id"),
+  siteType: text("site_type").notNull().default("SHELTER"),
+  woNumber: text("wo_number"),
+  tcnNumber: text("tcn_number"),
+  pmrMonth: text("pmr_month"),
+  region: text("region"),
+  team: text("team"),
+  scheduledStart: text("scheduled_start"),
+  scheduledEnd: text("scheduled_end"),
   technicianEmail: text("technician_email"),
   status: text("status").notNull().default("assigned"),
   checkedInAt: text("checked_in_at"),
@@ -38,6 +47,28 @@ export const captureTasks = pgTable("capture_tasks", {
   requiredDetails: text("required_details").notNull(),
   isHousekeeping: boolean("is_housekeeping").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const checklistItems = pgTable("checklist_items", {
+  id: text("id").primaryKey(),
+  siteType: text("site_type").notNull(),
+  templateVersion: text("template_version").notNull(),
+  suffix: integer("suffix").notNull(),
+  originalId: text("original_id"),
+  groupCode: text("group_code").notNull(),
+  groupLabel: text("group_label").notNull(),
+  originalWording: text("original_wording"),
+  wordingStatus: text("wording_status").notNull(),
+  sortOrder: integer("sort_order").notNull(),
+});
+
+export const evidenceLinks = pgTable("evidence_links", {
+  id: text("id").primaryKey(),
+  evidenceId: text("evidence_id").notNull(),
+  checklistItemId: text("checklist_item_id").notNull(),
+  workOrderId: text("work_order_id").notNull(),
+  linkedByEmail: text("linked_by_email").notNull(),
+  linkedAt: text("linked_at").notNull(),
 });
 
 export const galleryApprovals = pgTable("gallery_approvals", {
