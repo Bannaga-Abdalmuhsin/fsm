@@ -1,10 +1,10 @@
 {
-  "name": "App",
-  "short_name": "App",
-  "description": "Agent-Native app starter ready to customize",
+  "name": "FSM Performance Check",
+  "short_name": "FSM PMR",
+  "description": "PMR evidence capture and quality review",
   "start_url": "./",
-  "background_color": "#111111",
-  "theme_color": "#18181B",
+  "background_color": "#f8f7fb",
+  "theme_color": "#6b18b9",
   "icons": [
     {
       "src": "icon-192.svg",

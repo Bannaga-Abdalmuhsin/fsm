@@ -59,12 +59,22 @@ function matchesPathPrefix(pathname: string, prefix: string): boolean {
 }
 
 function viewForPath(pathname: string): string {
+  if (pathname.startsWith("/orders/")) return "pmr-order";
+  if (pathname.startsWith("/checklists")) return "pmr-checklists";
+  if (pathname.startsWith("/review")) return "pmr-review";
+  if (pathname.startsWith("/settings")) return "settings";
   if (pathname === "/") return "home";
   return "home";
 }
 
 function pathForView(view?: string): string {
   switch (view) {
+    case "pmr-checklists":
+      return "/checklists";
+    case "pmr-review":
+      return "/review";
+    case "settings":
+      return "/settings";
     case "home":
       return "/";
     default:
