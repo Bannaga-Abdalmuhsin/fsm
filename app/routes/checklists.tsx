@@ -1,7 +1,7 @@
-import { useActionQuery } from "@agent-native/core/client/hooks";
 import { useState } from "react";
 
 import { Shell, Badge } from "@/components/pmr/Shell";
+import { useActionQuery } from "@/lib/pmr-actions";
 
 import { checklists } from "../../shared/checklists";
 export function meta() {

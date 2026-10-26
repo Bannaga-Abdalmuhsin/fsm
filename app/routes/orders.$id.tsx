@@ -1,8 +1,3 @@
-import { appPath } from "@agent-native/core/client/api-path";
-import {
-  useActionQuery,
-  useActionMutation,
-} from "@agent-native/core/client/hooks";
 import {
   IconArrowLeft,
   IconCamera,
@@ -20,7 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useActionQuery, useActionMutation } from "@/lib/pmr-actions";
 import { getFix, listDrafts, syncDrafts } from "@/lib/pmr-offline";
+import { pmrPhotoUrl } from "@/lib/pmr-photo";
 
 import { formatTime, locationGate, type Geo } from "../../shared/pmr";
 export function meta() {
@@ -440,13 +437,9 @@ export default function OrderPage() {
             <div className="pmr-photo-grid">
               {visible.map((p) => (
                 <article className="pmr-photo" key={p.id}>
-                  <a
-                    href={appPath(`/api/pmr/photo?id=${p.id}`)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a href={pmrPhotoUrl(p.id)} target="_blank" rel="noreferrer">
                     <img
-                      src={appPath(`/api/pmr/photo?id=${p.id}`)}
+                      src={pmrPhotoUrl(p.id)}
                       loading="lazy"
                       alt={`${group?.title} evidence captured ${formatTime(p.capturedAt)}`}
                     />

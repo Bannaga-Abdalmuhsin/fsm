@@ -1,7 +1,7 @@
-import { useActionQuery } from "@agent-native/core/client/hooks";
 import { Link } from "react-router";
 
 import { Shell, Badge, Empty } from "@/components/pmr/Shell";
+import { useActionQuery } from "@/lib/pmr-actions";
 
 import { formatTime } from "../../shared/pmr";
 export default function Review() {

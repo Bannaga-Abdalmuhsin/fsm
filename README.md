@@ -64,3 +64,11 @@ node --import tsx scripts/smoke-upload.ts
 ```
 
 Smoke scripts use clearly synthetic data and remove their fixtures. Run them against an isolated local database, never production. Field-device camera/GPS, storage-provider roundtrip, AI equipment/OCR accuracy and a full authenticated mobile walkthrough still require commissioning with approved configuration.
+
+## GitHub Pages interactive preview
+
+`pnpm run build:pages` builds the existing screens with a separate in-memory sample adapter into `docs/`. The public preview has a permanent demo banner, sample work orders and the full ETL catalogue. Real camera/gallery uploads, device GPS, authentication, storage and AI requests are disabled in this preview. Its illustrated evidence scores are predefined examples, not analysis results. Reloading or resetting clears demo changes.
+
+To publish the committed preview, open repository **Settings → Pages**, select **Deploy from a branch**, then choose **main** and **/docs**, and save. GitHub Pages hosts this static demo; the authenticated operational app still needs its server deployment. Keep production photographs and credentials out of `docs/` and `preview/`.
+
+Source entry: `preview/main.tsx`. Preview build configuration: `vite.pages.config.ts`. Production action/photo helpers are direct server-transport helpers; only the standalone preview build substitutes them. Refreshing a demo URL works through hash routing.

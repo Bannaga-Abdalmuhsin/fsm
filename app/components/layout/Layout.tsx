@@ -1,8 +1,8 @@
-import { useActionQuery } from "@agent-native/core/client/hooks";
 import { HeaderActionsProvider } from "@agent-native/toolkit/app-shell";
 import { useLocation } from "react-router";
 
 import { Shell } from "@/components/pmr/Shell";
+import { useActionQuery } from "@/lib/pmr-actions";
 export function Layout({ children }: { children: React.ReactNode }) {
   const { data } = useActionQuery("get-pmr-dashboard", {});
   const location = useLocation();

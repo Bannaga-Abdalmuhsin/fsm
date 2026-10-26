@@ -1,4 +1,3 @@
-import { useActionQuery } from "@agent-native/core/client/hooks";
 import {
   IconArrowUpRight,
   IconMapPin,
@@ -15,6 +14,7 @@ import { Shell, Badge, Empty } from "@/components/pmr/Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useActionQuery } from "@/lib/pmr-actions";
 
 import { formatTime } from "../../shared/pmr";
 export function meta() {

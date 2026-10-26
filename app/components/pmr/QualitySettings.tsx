@@ -1,12 +1,9 @@
-import {
-  useActionQuery,
-  useActionMutation,
-} from "@agent-native/core/client/hooks";
 import { useState } from "react";
 
 import { Shell, Badge } from "@/components/pmr/Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useActionQuery, useActionMutation } from "@/lib/pmr-actions";
 
 import { defaultPolicy, dimensions } from "../../../shared/pmr";
 export default function Settings() {

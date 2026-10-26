@@ -15,7 +15,8 @@
     "test": "vitest --run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "agent-native db-migrate",
-    "agent-native:doctor": "agent-native doctor"
+    "agent-native:doctor": "agent-native doctor",
+    "build:pages": "vite build --config vite.pages.config.ts"
   },
   "dependencies": {
     "@agent-native/agentkit": "^0.220.0",

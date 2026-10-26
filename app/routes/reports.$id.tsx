@@ -1,9 +1,9 @@
-import { appPath } from "@agent-native/core/client/api-path";
-import { useActionQuery } from "@agent-native/core/client/hooks";
 import { useParams, Link } from "react-router";
 
 import { Badge } from "@/components/pmr/Shell";
 import { Button } from "@/components/ui/button";
+import { useActionQuery } from "@/lib/pmr-actions";
+import { pmrPhotoUrl } from "@/lib/pmr-photo";
 
 import { formatTime } from "../../shared/pmr";
 export default function Report() {
@@ -162,10 +162,7 @@ export default function Report() {
                   )
                   .map((p) => (
                     <figure key={p.id}>
-                      <img
-                        src={appPath(`/api/pmr/photo?id=${p.id}`)}
-                        alt={`${g.title} ${p.id}`}
-                      />
+                      <img src={pmrPhotoUrl(p.id)} alt={`${g.title} ${p.id}`} />
                       <figcaption>
                         {p.id} · {formatTime(p.capturedAt)} · {p.source} ·{" "}
                         {p.state}

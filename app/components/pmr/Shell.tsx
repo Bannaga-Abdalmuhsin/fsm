@@ -1,4 +1,3 @@
-import { signOut } from "@agent-native/core/client/hooks";
 import {
   IconClipboardCheck,
   IconListCheck,
@@ -9,6 +8,7 @@ import {
 import { NavLink } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import { signOut } from "@/lib/pmr-actions";
 export function Shell({
   children,
   role,

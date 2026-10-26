@@ -55,3 +55,5 @@ FSM Performance Check: `/` scheduled work; `/orders/:id` field capture/results/r
 |review-pmr-evidence|Supervisor evidence decision and ETL links|
 |update-pmr-order|Submit/return/approve with completion gates|
 |save-pmr-policy|Publish scoring version for future WOs|
+
+The `preview/` entry is an explicitly labeled, isolated static demonstration of the same screens for GitHub Pages (`pnpm run build:pages` → `docs/`). Never enable it as production auth or connect it to operational records. Demo role changes and predefined findings are illustrative only. Rebuild `docs/` after changing preview code. Production action transport remains in `app/lib/pmr-actions.ts`.
