@@ -10,6 +10,7 @@ export default defineAppConfig({
     disabled: ["integrations", "observational-memory", "sentry", "terminal"],
   },
   app: {
+    name: "FSM Performance Check",
     homePath: "/",
   },
 });

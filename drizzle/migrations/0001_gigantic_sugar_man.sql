@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "pmr_members_scope_member" ON "pmr_members" USING btree (coalesce("org_id", ''),"owner_email");--> statement-breakpoint
+CREATE UNIQUE INDEX "pmr_orders_scope_wo_unique" ON "pmr_orders" USING btree (coalesce("org_id", "owner_email"),"wo");

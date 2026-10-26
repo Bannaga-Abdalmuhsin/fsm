@@ -40,3 +40,18 @@ Use `adding-a-feature` for functional parity and `frontend-design` for a user-fa
 Before building common workspace or agent UI, read `agent-native-toolkit`; for supported customization, read `customizing-agent-native`.
 
 - Guarded verification: run `pnpm agent-native:doctor`; fix findings before done.
+
+## PMR operations
+FSM Performance Check: `/` scheduled work; `/orders/:id` field capture/results/review; `/checklists` source catalogue; `/review` active visits; `/settings` scoring/readiness. Navigation path includes the selected order ID. All times are UTC instants, displayed Asia/Riyadh. Provision roles only via the operator script after identity verification; never bootstrap the first signup as admin. Data inherits order access (assigned technician or scoped supervisor/admin). Photos require private blob storage; no public originals or SQL image bodies. Capture requires fresh accurate GPS reliably within 250 m and valid TCN; late offline upload does not change capture time. Browser GPS/camera metadata is device-reported, not attested. Functional checks need technician readings/tests. Never invent AI results: unavailable vision stays pending. Hard findings block acceptance. Existing WOs freeze checklist and scoring snapshots.
+
+|Action|Purpose|
+|---|---|
+|get-pmr-dashboard|Role, authorized orders, readiness|
+|create-pmr-order|Schedule visit with TCN, site and equipment|
+|get-pmr-order|Read results, evidence and audit|
+|check-in-pmr|Validate site location/TCN|
+|save-pmr-result|Explicit ETL result/readings/TT/NOC|
+|manage-pmr-approval|Admin gallery exception|
+|review-pmr-evidence|Supervisor evidence decision and ETL links|
+|update-pmr-order|Submit/return/approve with completion gates|
+|save-pmr-policy|Publish scoring version for future WOs|
