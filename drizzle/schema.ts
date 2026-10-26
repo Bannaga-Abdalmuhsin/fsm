@@ -1,27 +1,119 @@
-// App tables live here, defined with Drizzle's PostgreSQL builders. Local dev
-// runs them on PGlite and hosted deploys on Postgres.
-//
-// After editing this file, run `pnpm db:generate` and restart the dev server
-// (see `drizzle/START_HERE.md`). Example table, private to its creator unless
-// shared (see the `sharing` skill) — uncomment and adapt:
-//
-// import { sql } from "drizzle-orm";
-// import { boolean, pgTable, text } from "drizzle-orm/pg-core";
-// import {
-//   createSharesTable,
-//   ownableColumns,
-// } from "@agent-native/core/db/schema";
-//
-// export const notes = pgTable("notes", {
-//   id: text("id").primaryKey(),
-//   title: text("title").notNull(),
-//   body: text("body").notNull().default(""),
-//   archived: boolean("archived").notNull().default(false),
-//   createdAt: text("created_at").notNull().default(sql`now()`),
-//   updatedAt: text("updated_at").notNull().default(sql`now()`),
-//   ...ownableColumns(),
-// });
-//
-// export const noteShares = createSharesTable("note_shares");
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  doublePrecision,
+  integer,
+  pgTable,
+  text,
+} from "drizzle-orm/pg-core";
 
-export {};
+export const staffMembers = pgTable("staff_members", {
+  email: text("email").primaryKey(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  createdAt: text("created_at").notNull().default(sql`now()`),
+});
+
+export const workOrders = pgTable("work_orders", {
+  id: text("id").primaryKey(),
+  reference: text("reference").notNull(),
+  siteName: text("site_name").notNull(),
+  siteLatitude: doublePrecision("site_latitude").notNull(),
+  siteLongitude: doublePrecision("site_longitude").notNull(),
+  tcnStart: text("tcn_start").notNull(),
+  tcnEnd: text("tcn_end").notNull(),
+  technicianEmail: text("technician_email"),
+  status: text("status").notNull().default("assigned"),
+  checkedInAt: text("checked_in_at"),
+  createdAt: text("created_at").notNull().default(sql`now()`),
+});
+
+export const captureTasks = pgTable("capture_tasks", {
+  id: text("id").primaryKey(),
+  workOrderId: text("work_order_id").notNull(),
+  etlCode: text("etl_code").notNull(),
+  title: text("title").notNull(),
+  evidenceGroup: text("evidence_group").notNull(),
+  expectedEquipment: text("expected_equipment").notNull(),
+  requiredDetails: text("required_details").notNull(),
+  isHousekeeping: boolean("is_housekeeping").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const galleryApprovals = pgTable("gallery_approvals", {
+  id: text("id").primaryKey(),
+  workOrderId: text("work_order_id").notNull(),
+  technicianEmail: text("technician_email").notNull(),
+  evidenceGroups: text("evidence_groups").notNull(),
+  reason: text("reason").notNull(),
+  maxImages: integer("max_images").notNull(),
+  imagesUsed: integer("images_used").notNull().default(0),
+  expiresAt: text("expires_at").notNull(),
+  approvedByEmail: text("approved_by_email").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const evidence = pgTable("evidence", {
+  id: text("id").primaryKey(),
+  workOrderId: text("work_order_id").notNull(),
+  taskId: text("task_id").notNull(),
+  technicianEmail: text("technician_email").notNull(),
+  source: text("source").notNull(),
+  galleryApprovalId: text("gallery_approval_id"),
+  imageSha256: text("image_sha256").notNull(),
+  averageHash: text("average_hash").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  sharpness: doublePrecision("sharpness").notNull(),
+  skyFraction: doublePrecision("sky_fraction").notNull(),
+  meanLuma: doublePrecision("mean_luma").notNull(),
+  daylightSignal: text("daylight_signal").notNull(),
+  deviceCapturedAt: text("device_captured_at").notNull(),
+  deviceTimezone: text("device_timezone").notNull(),
+  gpsTime: text("gps_time"),
+  clientSentAt: text("client_sent_at").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  serverOffsetMs: integer("server_offset_ms").notNull(),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  accuracyMeters: doublePrecision("accuracy_meters").notNull(),
+  distanceMeters: doublePrecision("distance_meters").notNull(),
+  locationTimestamp: text("location_timestamp").notNull(),
+  sunAltitudeDegrees: doublePrecision("sun_altitude_degrees").notNull(),
+  visionStatus: text("vision_status").notNull(),
+  decision: text("decision").notNull(),
+  decisionBasis: text("decision_basis").notNull(),
+  decisionNote: text("decision_note"),
+  decidedBy: text("decided_by"),
+  decidedAt: text("decided_at"),
+});
+
+export const evidenceFindings = pgTable("evidence_findings", {
+  id: text("id").primaryKey(),
+  evidenceId: text("evidence_id").notNull(),
+  kind: text("kind").notNull(),
+  code: text("code").notNull(),
+  severity: text("severity").notNull(),
+  resolvable: boolean("resolvable").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull(),
+  resolutionNote: text("resolution_note"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: text("resolved_at"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const auditEvents = pgTable("audit_events", {
+  id: text("id").primaryKey(),
+  workOrderId: text("work_order_id"),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  eventType: text("event_type").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  message: text("message").notNull(),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  accuracyMeters: doublePrecision("accuracy_meters"),
+  distanceMeters: doublePrecision("distance_meters"),
+  createdAt: text("created_at").notNull(),
+});

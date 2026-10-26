@@ -38,14 +38,14 @@ visual direction — read and preserve them on every subsequent build; do not
 re-derive a new direction. The first UI pass must fill these fields in as
 part of that build, not leave them as an empty template.
 
-- Product mode: `operate` | `read` | `persuade` | `experience`
-- Audience and cadence:
-- Visual world (name + the feeling it creates):
-- Palette family + neutral undertone:
-- Type treatment:
-- Composition:
-- Shape language:
-- Anti-references (defaults this app must not drift toward):
+- Product mode: `operate`
+- Audience and cadence: field technicians on phones at telecom and power sites, supervisors and administrators reviewing evidence at a desk; used per work order, many times a day.
+- Visual world (name + the feeling it creates): "Site control room" — a calm, instrument-panel feel where status, location, and time are read at a glance and blocking findings are unmistakable.
+- Palette family + neutral undertone: deep teal accent (hue 184) on a neutral, slightly cool background; emerald for accepted, amber for supervisor review, red for retake.
+- Type treatment: Inter Variable; small uppercase labels for sections, mono for work-order references and ETL codes, timestamps always in Asia/Riyadh.
+- Composition: work-order list rail beside a detail column; location and check-in status stays at the top of each work order; tasks read as stacked cards with evidence history beneath.
+- Shape language: 8px radius, hairline borders, soft tinted status pills.
+- Anti-references (defaults this app must not drift toward): playful consumer-app gradients, decorative illustrations, icon-heavy dashboards, and any styling that suggests a score or check mark has already approved evidence.
 
 ## Agent-Native is structural, not visual
 
