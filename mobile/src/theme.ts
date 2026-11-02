@@ -1,20 +1,7 @@
+import { Platform } from "react-native";
 export const colors = {
-  background: "#06140F",
-  secondary: "#0A1F17",
-  panel: "#0B1C15",
-  panelRaised: "#0F2A20",
-  border: "#1F4A3A",
-  foreground: "#FFFFFF",
-  muted: "#A9C7BB",
-  action: "#34D399",
-  actionInk: "#041009",
-  actionHover: "#059669",
-  danger: "#F87171",
-  warning: "#FBBF24",
+ background: "#F4F7F5", secondary: "#F0F5F2", panel: "#FFFFFF", panelRaised: "#E8F5ED",
+ border: "#DDE7E0", foreground: "#142C21", muted: "#64796D", action: "#087D49",
+ actionInk: "#FFFFFF", actionHover: "#06633A", danger: "#BC343A", warning: "#986200",
 } as const;
-
-export const fonts = {
-  regular: "SpaceGrotesk_400Regular",
-  medium: "SpaceGrotesk_500Medium",
-  bold: "SpaceGrotesk_700Bold",
-} as const;
+export const fonts = { regular: Platform.OS === "ios" ? "System" : "sans-serif", medium: Platform.OS === "ios" ? "System" : "sans-serif-medium", bold: Platform.OS === "ios" ? "System" : "sans-serif-medium" } as const;

@@ -10,6 +10,7 @@ import { Card, Notice, Page, RequireMember } from "@/components/pmr/pmr-shell";
 import { Button } from "@/components/ui/button";
 import { currentFix } from "@/lib/geolocation";
 import {
+  exportOrderPackage,
   captureEvidence,
   checkInOrder,
   fetchEvidence,
@@ -100,6 +101,7 @@ function OrderDetail({ member }: { member: Member }) {
       <Link to="/" className="text-sm underline">
         Back to work orders
       </Link>
+      {member.role !== "technician" ? <Button disabled={run.isPending} onClick={() => run.mutate(() => exportOrderPackage(order.id,order.wo))}>Export WO report & photos</Button> : null}
       <Card>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Site</dt>

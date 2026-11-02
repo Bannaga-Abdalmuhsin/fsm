@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { localizedGroupTitle,useLanguage } from "../i18n";
 import { CameraView, useCameraPermissions, type CameraCapturedPicture } from "expo-camera";
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
@@ -35,6 +36,7 @@ type Props = {
 type Stamp = { uri: string; aspectRatio: number; lines: string[] };
 
 export function CaptureScreen({ order, group, email, team, galleryApproval, onDone }: Props) {
+  const {t,locale}=useLanguage();
   const [permission, requestPermission] = useCameraPermissions();
   const { width } = useWindowDimensions();
   const cameraRef = useRef<CameraView>(null);
@@ -71,13 +73,13 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
   if (!locationGranted) {
     return (
       <View style={styles.center}>
-        <Text style={styles.text}>Location permission is required before evidence capture can start.</Text>
+        <Text style={styles.text}>{t("locationRequired")}</Text>
         <Pressable
           onPress={() => ensureLocationPermission().then(setLocationGranted, () => setLocationGranted(false))}
           style={styles.primary}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryText}>Allow location</Text>
+          <Text style={styles.primaryText}>{t("locationPermission")}</Text>
         </Pressable>
       </View>
     );
@@ -87,9 +89,9 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
   if (!permission.granted) {
     return (
       <View style={styles.center}>
-        <Text style={styles.text}>Camera permission is required to capture evidence.</Text>
+        <Text style={styles.text}>{t("cameraRequired")}</Text>
         <Pressable onPress={requestPermission} style={styles.primary} accessibilityRole="button">
-          <Text style={styles.primaryText}>Allow camera</Text>
+          <Text style={styles.primaryText}>{t("cameraPermission")}</Text>
         </Pressable>
       </View>
     );
@@ -202,7 +204,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
       };
       await new File(dir, "metadata.json").write(JSON.stringify(metadata, null, 2));
       setStamp(null);
-      setSaved("Photo saved securely on this device and queued for upload.");
+      setSaved(t("photoQueued"));
       void flushEvidence(email);
     } catch (err) {
       setStamp(null);
@@ -216,7 +218,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
     <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.heading}>
-          {group.id} · {group.title}
+          {group.id} · {localizedGroupTitle(group.title,locale)}
         </Text>
         <Text style={styles.muted}>
           {order.site_id} · ETLs {group.etls.map((e) => e.number).join(", ")}
@@ -224,18 +226,18 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
         <Text style={styles.muted}>
           {clock
             ? `Clock offset ${Math.round(clock.offsetMs)} ms ±${Math.round(clock.uncertaintyMs)} ms vs server`
-            : clockError ?? "Checking clock against server…"}
+            : clockError ?? t("checkingClock")}
         </Text>
       </View>
 
-      {siteReady && !galleryApproval ? <CameraView ref={cameraRef} style={styles.camera} facing="back" /> : <View style={styles.center}><Text style={styles.text}>{error ?? clockError ?? (siteReady && galleryApproval ? "Admin-approved import. Original EXIF time and GPS are required." : "Checking site GPS before opening camera…")}</Text><Pressable onPress={onDone}><Text style={styles.ghostText}>Back and retry</Text></Pressable></View>}
+      {siteReady && !galleryApproval ? <CameraView ref={cameraRef} style={styles.camera} facing="back" /> : <View style={styles.center}><Text style={styles.text}>{error ?? clockError ?? (siteReady && galleryApproval ? "Admin-approved import. Original EXIF time and GPS are required." : t("checkingGps"))}</Text><Pressable onPress={onDone}><Text style={styles.ghostText}>{t("back")}</Text></Pressable></View>}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {saved ? <Text style={styles.message}>{saved}</Text> : null}
 
       <View style={styles.footer}>
         <Pressable onPress={onDone} style={styles.ghost} accessibilityRole="button">
-          <Text style={styles.ghostText}>Done</Text>
+          <Text style={styles.ghostText}>{t("done")}</Text>
         </Pressable>
         <Pressable
           onPress={captureGroupPhoto}
@@ -243,7 +245,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
           style={[styles.primary, busy && styles.disabled]}
           accessibilityRole="button"
         >
-          <Text style={styles.primaryText}>{busy ? "Saving…" : galleryApproval ? "Choose approved photo" : "Capture photo"}</Text>
+          <Text style={styles.primaryText}>{busy ? t("saving") : galleryApproval ? t("gallery") : t("capture")}</Text>
         </Pressable>
       </View>
 

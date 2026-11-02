@@ -132,14 +132,15 @@ export type Result = { id: string; etl_code: string; instance: string; status: s
 export type ReviewEvent = { target_id: string; stage: string; decision: string; fingerprint: string; note: string };
 export type GalleryApproval = { id: string; groups: string[]; expires_at: string; max_images: number; used: number; revoked_at: string | null };
 export async function orderRecords(orderId: string) {
-  const [e, r, v, a] = await Promise.all([
+  const [e, r, v, a, g] = await Promise.all([
     client().from("pmr_evidence").select("*").eq("order_id", orderId),
     client().from("pmr_results").select("*").eq("order_id", orderId),
     client().from("pmr_review_events").select("*").eq("order_id", orderId),
     client().from("pmr_approvals").select("*").eq("order_id", orderId),
+    client().from("pmr_group_submissions").select("*").eq("order_id", orderId),
   ]);
-  for (const q of [e, r, v, a]) if (q.error) throw new Error(q.error.message);
-  return { evidence: e.data as Evidence[], results: r.data as Result[], reviews: v.data as ReviewEvent[], approvals: a.data as GalleryApproval[] };
+  for (const q of [e, r, v, a, g]) if (q.error) throw new Error(q.error.message);
+  return { groups: g.data as GroupSubmission[], evidence: e.data as Evidence[], results: r.data as Result[], reviews: v.data as ReviewEvent[], approvals: a.data as GalleryApproval[] };
 }
 export async function evidenceUrl(e: Evidence) {
   const { data, error } = await client().storage.from(e.handle.bucket).createSignedUrl(e.handle.derivative?.path ?? e.handle.path, 120);
@@ -205,4 +206,32 @@ export async function createAdminTest(order: Order) {
  const { data, error } = await client().rpc("pmr_create_admin_test", { p_order: order.id });
  if (error) throw new Error(error.message);
  return data as Order;
+}
+
+export type GroupSubmission = { order_id:string; group_id:string; status:EtlStatus; remarks:string; measurements:Measurements; revision:number };
+export type Measurements = Partial<Record<"temperature_c"|"dc_busbar_v"|"bbu_v"|"ac_v",number>>;
+export async function saveGroup(orderId:string,groupId:string,status:EtlStatus,remarks:string,measurements:Measurements,revision:number) {
+ const {data,error}=await client().rpc("pmr_save_group",{p_order:orderId,p_group:groupId,p_status:status,p_remarks:remarks,p_measurements:measurements,p_revision:revision});
+ if(error)throw new Error(error.message);return data as GroupSubmission;
+}
+export type Profile = { name:string; mobile:string; locale:import("./i18n").Locale; avatar_path:string|null };
+export async function loadProfile() {
+ const {data:auth,error:authError}=await client().auth.getUser();if(authError||!auth.user)throw new Error("Sign in again.");
+ const {data,error}=await client().from("pmr_profiles").select("name,mobile,locale,avatar_path").eq("user_id",auth.user.id).maybeSingle();
+ if(error)throw new Error(error.message);return data as Profile|null;
+}
+export async function saveProfile(profile:Profile) {
+ const {data,error}=await client().rpc("pmr_save_profile",{p_name:profile.name,p_mobile:profile.mobile,p_locale:profile.locale,p_avatar:profile.avatar_path});
+ if(error)throw new Error(error.message);return data as Profile;
+}
+export async function profileImageUrl(path:string) {
+ const {data,error}=await client().storage.from("pmr-profiles").createSignedUrl(path,300);if(error)throw new Error(error.message);return data.signedUrl;
+}
+export async function uploadAvatar(uri:string) {
+ const {data:auth,error:authError}=await client().auth.getUser();if(authError||!auth.user)throw new Error("Sign in again.");
+ const {File}=await import("expo-file-system");const {randomUUID}=await import("expo-crypto");
+ const path=`${auth.user.id}/${randomUUID()}.jpg`;const bytes=await new File(uri).bytes();
+ if(bytes.length>2097152)throw new Error("Profile photo is too large.");
+ const {error}=await client().storage.from("pmr-profiles").upload(path,bytes,{contentType:"image/jpeg",upsert:false});
+ if(error)throw new Error(error.message);return path;
 }

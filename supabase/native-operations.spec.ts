@@ -13,10 +13,10 @@ const fix={latitude:24.7,longitude:46.7,accuracy:5,timestamp:new Date().toISOStr
 async function as(email:string){await db.exec('reset role');await db.query('insert into auth.users values($1,$1,now()) on conflict(id) do nothing',[email]);await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:email,email,role:'authenticated'})]);await db.exec('set role authenticated');}
 async function admin(){await db.exec('reset role');}
 beforeAll(async()=>{
- db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));
+ db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));await db.exec('alter table storage.buckets add column file_size_limit bigint, add column allowed_mime_types text[]');
  await db.exec(`create table public.pmr_sites(site_id text primary key,location text,latitude float8,longitude float8,site_status text,site_type text,vendor text,region text,district text,source_id text,source_row int,refreshed_at timestamptz,validation_errors jsonb);
  create table public.pmr_schedule_rows(source_id text,sync_id uuid,source_tab text,source_row int,site_id text,region text,district text,scheduled_date date,tcn_number text,tcn_time text,team_name text,supervisor_name text,raw jsonb,state text default 'draft',validation_errors jsonb default '[]',order_id text,synced_at timestamptz default now(),site_reference jsonb,primary key(source_id,sync_id));`);
- for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql'])await db.exec(sql(file));
+ for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql'])await db.exec(sql(file).replace("user_id uuid primary key references auth.users(id)","user_id text primary key references auth.users(id)"));
  await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('a','admin@test','org','admin','["CR"]','[]'),('t','tech@test','org','technician','["CR"]','[]'),('l','lead@test','org','team_leader','["CR"]','["Team"]'),('r','rm@test','org','regional_manager','["CR"]','[]');`);
  await db.query(`insert into public.pmr_orders(id,owner_email,org_id,site_id,site_type,region,team,assignee,wo,tcn,month,latitude,longitude,scheduled_start,scheduled_end,tcn_start,tcn_end,inventory,checklist,policy,created_at,updated_at) values('wo','admin@test','org','SITE','ODU','CR','Team','tech@test','WO1','TCN1','2026-11',24.7,46.7,$1,$2,$1,$2,'{}',$3,$4,$1,$1)`,[start,end,JSON.stringify(checklists.ODU),JSON.stringify(defaultPolicy)]);
 },60000);
@@ -91,6 +91,48 @@ describe('native workflow enforcement',()=>{
   await as('tech@test');
   await expect(db.query("select public.pmr_open_order('wo',$1)",[JSON.stringify(remote)])).rejects.toThrow(/250 m/);
 await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.stringify(remote)])).rejects.toThrow(/not assigned/);
+ });
+ it('saves group results atomically with optional remarks and only four measurement fields',async()=>{
+  await as('tech@test');
+  const g=checklists.ODU[0];
+  await expect(db.query("select public.pmr_save_group('wo','O01','Fail','',$1,0)",[JSON.stringify({fuel:30})])).rejects.toThrow(/Only numeric/);
+  const saved=(await db.query<{g:{revision:number}}>("select public.pmr_save_group('wo','O01','Fail','',$1,0) g",[JSON.stringify({temperature_c:32,dc_busbar_v:54,bbu_v:53,ac_v:230})])).rows[0].g;
+  expect(saved.revision).toBe(1);
+  expect((await db.query<{n:number}>("select count(*)::int n from public.pmr_results where order_id='wo' and instance='O01' and status='Fail' and remarks='' and tt='' ")).rows[0].n).toBe(g.etls.length);
+  await expect(db.exec("select public.pmr_save_group('wo','O01','Pass','','{}',0)")).rejects.toThrow(/changed/);
+  await as('lead@test');await expect(db.exec("select public.pmr_save_group('wo','O01','Pass','','{}',1)")).rejects.toThrow(/not assigned/);
+  const r=(await db.query<{id:string;updated_at:string}>("select id,updated_at from public.pmr_results where order_id='wo' and instance='O01' limit 1")).rows[0];
+  await db.query("select public.pmr_review_result($1,$2,'approved','')",[r.id,r.updated_at]);
+ });
+ it('lets office export scoped submissions but prevents technician export',async()=>{
+  await as('tech@test');await expect(db.exec("select public.pmr_export_snapshot('wo')")).rejects.toThrow(/Office access/);
+  await as('lead@test');const snapshot=(await db.query<{s:{order:{id:string};groups:unknown[]}}>("select public.pmr_export_snapshot('wo') s")).rows[0].s;expect(snapshot.order.id).toBe('wo');expect(snapshot.groups).toHaveLength(1);
+  await expect(db.exec("select public.pmr_export_snapshot('missing')")).rejects.toThrow(/Office access/);
+ });
+ it('keeps group N/A and Not tested explicit without requiring remarks',async()=>{
+  await as('tech@test');
+  await db.exec("select public.pmr_save_group('wo','O01','Not applicable','','{}',1)");
+  await db.exec("select public.pmr_save_group('wo','O01','Not tested','','{}',2)");
+  expect((await db.query<{status:string}>("select status from public.pmr_group_submissions where order_id='wo' and group_id='O01'")).rows[0].status).toBe('Not tested');
+ });
+ it('allows own profile edits without changing membership or exposing other technicians',async()=>{
+  await as('tech@test');await db.exec("select public.pmr_save_profile('Technician','+966 500000000','ur',null)");
+  expect((await db.query<{name:string}>("select name from public.pmr_profiles where user_id=auth.uid()")).rows[0].name).toBe('Technician');
+  await expect(db.exec("select public.pmr_save_profile('X','invalid!','ar',null)")).rejects.toThrow(/Invalid profile/);
+  await expect(db.exec("select public.pmr_save_profile('X','','en','someone/avatar.jpg')")).rejects.toThrow(/own profile/);
+  await expect(db.exec("update public.pmr_profiles set org_id='other'")).rejects.toThrow(/permission denied/);
+  await as('other@test');expect((await db.query("select * from public.pmr_profiles")).rows).toHaveLength(0);
+  await expect(db.exec("select public.pmr_save_profile('Other','','en',null)")).rejects.toThrow(/Provisioned/);
+ });
+ it('requires photos for PASS/FAIL but accepts a pending quality check for office review',async()=>{
+  await admin();
+  const group={...checklists.ODU[0],etls:[checklists.ODU[0].etls[0]]};
+  await db.query("insert into public.pmr_orders select (jsonb_populate_record(null::public.pmr_orders,to_jsonb(o)||$1::jsonb)).* from public.pmr_orders o where id='wo'",[JSON.stringify({id:'simple-wo',wo:'simpleWO',checklist:[group],status:'In progress',version:3})]);
+  await as('tech@test');await db.exec("select public.pmr_save_group('simple-wo','O01','Fail','','{}',0)");
+  await expect(db.exec("select public.pmr_submit_order('simple-wo',3)")).rejects.toThrow(/Upload a photo/);
+  await admin();await db.exec("insert into public.pmr_evidence select (jsonb_populate_record(null::public.pmr_evidence,to_jsonb(e)||'{\"id\":\"pending-photo\",\"capture_id\":\"pending-photo\",\"order_id\":\"simple-wo\",\"state\":\"Pending analysis\",\"analysis\":null,\"quality\":{\"score\":null,\"provisional\":true}}'::jsonb)).* from public.pmr_evidence e where id='photo'");
+  await as('tech@test');await db.exec("select public.pmr_submit_order('simple-wo',3)");
+  await as('lead@test');await expect(db.exec("select public.pmr_review_photo('pending-photo',3,'approved','')")).rejects.toThrow();
  });
  it('versions quality policies and refuses location weakening',async()=>{
   await as('admin@test');await expect(db.query('select public.pmr_save_quality_policy($1)',[JSON.stringify({...defaultPolicy,radius:500})])).rejects.toThrow(/cannot be relaxed/);

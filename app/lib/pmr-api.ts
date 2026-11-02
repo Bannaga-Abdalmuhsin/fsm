@@ -271,3 +271,10 @@ async function sha256Hex(buffer: ArrayBuffer) {
     b.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+export async function exportOrderPackage(orderId:string,wo:string){
+ const {data,error}=await getSupabase().functions.invoke("submission-export",{body:{orderId}});
+ if(error)throw new Error("Export failed. Confirm office access and retry.");
+ if(!(data instanceof Blob))throw new Error("Export did not return a ZIP package.");
+ const url=URL.createObjectURL(data);const a=document.createElement("a");a.href=url;a.download=`WO-${wo.replace(/[^a-zA-Z0-9_-]/g,"_")}.zip`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}

@@ -33,4 +33,4 @@ Photos do not prove functional alarm tests, electrical readings or absence of ma
 
 ## Developer verification
 
-140 relevant automated tests cover shared rules, catalogues, schedule sync, SQL workflow, image/vision adapters and durable uploads. Native/root typechecks, Deno checking, framework doctor and native bundle export are separate checks from device acceptance.
+152 relevant automated tests cover shared rules, catalogues, schedule sync, SQL workflow, image/vision adapters and durable uploads. Native/root typechecks, Deno checking, framework doctor and native bundle export are separate checks from device acceptance.

@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(4,16,9,0.78)",
   },
   line: {
-    color: colors.foreground,
+    color: "#FFFFFF",
     fontFamily: fonts.medium,
     fontSize: 13,
     lineHeight: 18,

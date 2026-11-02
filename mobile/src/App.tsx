@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-native";
-import { useFonts, SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
+import { LanguageProvider } from "./i18n";
+import { ProfileScreen } from "./screens/ProfileScreen";
 import type { Session } from "@supabase/supabase-js";
 
 import { listAssignedOrders, loadMembership, signOut, openOrder, getOrder, type Membership, type Order } from "./api";
@@ -21,15 +22,12 @@ import { CaptureScreen } from "./screens/CaptureScreen";
 type Route =
   | { name: "orders" }
   | { name: "admin" }
+  | { name: "profile" }
   | { name: "order"; order: Order }
   | { name: "capture"; order: Order; group: EvidenceGroup; galleryApproval?: string };
 
-export default function App() {
-  const [fontsLoaded] = useFonts({
-    SpaceGrotesk_400Regular,
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_700Bold,
-  });
+export default function App() { return <LanguageProvider><AppContent /></LanguageProvider>; }
+function AppContent() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
@@ -86,7 +84,7 @@ export default function App() {
     );
   }
 
-  if (!fontsLoaded || session === undefined) {
+  if (session === undefined) {
     return (
       <Centered>
         <ActivityIndicator color={colors.action} />
@@ -97,7 +95,7 @@ export default function App() {
   if (!session) {
     return (
       <>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <LoginScreen />
       </>
     );
@@ -137,15 +135,17 @@ export default function App() {
     } catch (e) { setError((e as Error).message); }
   }
   const remoteTest = membership.member.role === "admin" && (route.name === "order" || route.name === "capture") && route.order.inventory?.admin_test === true && route.order.assignee.toLowerCase() === email.toLowerCase();
-  const team = route.name === "orders" || route.name === "admin" ? "" : route.order.team;
+  const team = route.name === "orders" || route.name === "admin" || route.name === "profile" ? "" : route.order.team;
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
+      {route.name === "profile" ? <ProfileScreen email={email} onBack={() => setRoute({name:"orders"})} /> : null}
       {route.name === "admin" && membership.member.role === "admin" ? <AdminScreen onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
       {route.name === "orders" ? (
         <OrdersScreen
           email={email}
+          onProfile={() => setRoute({name:"profile"})}
           orders={orders}
           error={error}
           onOpen={(order) => { void showOrder(order); }}

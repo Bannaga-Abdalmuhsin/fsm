@@ -2,29 +2,29 @@
   "expo": {
     "name": "BM FSM PMR",
     "slug": "bm-fsm-pmr",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "orientation": "portrait",
     "scheme": "bmfsmpmr",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
-    "backgroundColor": "#06140F",
+    "backgroundColor": "#F4F7F5",
     "ios": {
       "bundleIdentifier": "com.businessmagnificence.fsm",
       "supportsTablet": false,
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.businessmagnificence.fsm",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#06140F"
+        "backgroundColor": "#F4F7F5"
       },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "versionCode": 3
+      "versionCode": 4
     },
     "plugins": [
       "expo-secure-store",
@@ -46,7 +46,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow photo access only for an administrator-approved PMR import.",
+          "photosPermission": "Allow access to your profile photo or an administrator-approved PMR evidence import.",
           "cameraPermission": false,
           "microphonePermission": false
         }

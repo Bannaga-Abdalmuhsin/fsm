@@ -12,12 +12,14 @@ import {
   View,
 } from "react-native";
 
+import { languages,useLanguage } from "../i18n";
 import { requestPasswordReset, signIn } from "../api";
 import { colors, fonts } from "../theme";
 
 const logo = require("../../assets/bm-logo.png");
 
 export function LoginScreen() {
+  const {t,locale,rtl,setLocale}=useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -62,13 +64,13 @@ export function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.glow} />
+        <View style={{flexDirection:"row",justifyContent:"center",gap:14,marginBottom:24,flexWrap:"wrap"}}>{languages.map(l=><Pressable key={l.id} onPress={()=>setLocale(l.id)} accessibilityRole="button" style={{minHeight:44,justifyContent:"center"}}><Text style={{color:locale===l.id?colors.action:colors.muted,fontWeight:locale===l.id?"700":"400"}}>{l.label}</Text></Pressable>)}</View>
         <Image source={logo} style={styles.logo} accessibilityLabel="Business Magnificence logo" />
         <Text style={styles.brand}>Business Magnificence</Text>
-        <Text style={styles.title}>PMR Evidence Verification</Text>
+        <Text style={styles.title}>{t("title")}</Text>
 
         <View style={styles.panel}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>{t("email")}</Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -82,7 +84,7 @@ export function LoginScreen() {
             accessibilityLabel="Email"
           />
 
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>{t("password")}</Text>
           <View style={styles.passwordRow}>
             <TextInput
               value={password}
@@ -102,7 +104,7 @@ export function LoginScreen() {
               accessibilityRole="button"
               accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             >
-              <Text style={styles.toggleText}>{showPassword ? "Hide" : "Show"}</Text>
+              <Text style={styles.toggleText}>{showPassword ? t("hide") : t("show")}</Text>
             </Pressable>
           </View>
 
@@ -118,12 +120,12 @@ export function LoginScreen() {
             {busy ? (
               <ActivityIndicator color={colors.actionInk} />
             ) : (
-              <Text style={styles.primaryText}>Sign in</Text>
+              <Text style={styles.primaryText}>{t("signIn")}</Text>
             )}
           </Pressable>
 
           <Pressable onPress={forgotPassword} disabled={busy} style={styles.link} accessibilityRole="button">
-            <Text style={styles.linkText}>Forgot password?</Text>
+            <Text style={styles.linkText}>{t("forgot")}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -164,7 +166,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 24,
     padding: 20,
   },
   label: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: 12, marginBottom: 6 },
@@ -173,7 +175,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 14,
     color: colors.foreground,
     fontFamily: fonts.regular,
@@ -186,7 +188,7 @@ const styles = StyleSheet.create({
     minWidth: 72,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 14,
     borderColor: colors.border,
     borderWidth: 1,
   },
@@ -196,7 +198,7 @@ const styles = StyleSheet.create({
   primary: {
     minHeight: 52,
     marginTop: 20,
-    borderRadius: 8,
+    borderRadius: 14,
     backgroundColor: colors.action,
     justifyContent: "center",
     alignItems: "center",

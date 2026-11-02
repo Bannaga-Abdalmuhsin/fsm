@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { createAdminTest, evidenceUrl, getOrder, grantGallery, orderRecords, reviewOrder, reviewPhoto, reviewResult, retryAnalysis, revokeGallery, type Evidence, type Order } from "../api";
+import { exportSubmission } from "../exportSubmission";
+import { useLanguage } from "../i18n";
 import { groupsFor } from "../domain";
 import { colors, fonts } from "../theme";
 
 type Records = Awaited<ReturnType<typeof orderRecords>>;
 export function ReviewScreen({ order: initial, role, onBack, onAdminTest }: { order: Order; role: string; onBack: () => void; onAdminTest: (order: Order) => void }) {
+  const {t,rtl}=useLanguage();
   const [order, setOrder] = useState(initial), [records, setRecords] = useState<Records | null>(null);
   const [note, setNote] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
   const [groupId, setGroupId] = useState(groupsFor(initial.site_type)[0]?.id ?? "");
@@ -20,14 +23,15 @@ export function ReviewScreen({ order: initial, role, onBack, onAdminTest }: { or
   }
   const action = (label: string, cb: () => Promise<unknown>) => <Pressable key={label} disabled={busy} onPress={() => { void run(cb); }} accessibilityRole="button" style={styles.button}><Text style={styles.buttonText}>{label}</Text></Pressable>;
   async function show(e: Evidence) { setUrls(prev => ({ ...prev, [e.id]: "" })); const url = await evidenceUrl(e); setUrls(prev => ({ ...prev, [e.id]: url })); }
-  return <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 80, gap: 12 }}>
+  return <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 80, gap: 12, direction:rtl?"rtl":"ltr" }}>
     <Pressable accessibilityRole="button" onPress={onBack}><Text style={styles.buttonText}>← Back</Text></Pressable>
     <Text style={styles.title}>{order.site_id} · PMR review</Text>
     <Text style={styles.text}>{order.wo} · {order.team} · {order.status}</Text>
     <Text style={styles.text}>Review level: {role.replaceAll("_", " ")}</Text>
     <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="Review note / return reason" placeholderTextColor={colors.muted} multiline maxLength={2000} accessibilityLabel="Review note" />
     {message ? <Text style={styles.notice} accessibilityLiveRegion="polite">{message}</Text> : null}
-    {action("Refresh", refresh)}
+    {action(t("refresh"), refresh)}
+    {action(t("export"), () => exportSubmission(order.id,order.wo??order.id))}
     {role === "admin" ? <View style={styles.card}><Text style={styles.notice}>Remote testing creates a clearly marked copy. Test photos use your real GPS and cannot close the operational WO.</Text>{action("Start admin remote test", async () => onAdminTest(await createAdminTest(order)))}</View> : null}
     <Text style={styles.title}>Photos</Text>
     {records?.evidence.filter(e => e.state !== "Superseded").map(e => <View key={e.id} style={styles.card}>
