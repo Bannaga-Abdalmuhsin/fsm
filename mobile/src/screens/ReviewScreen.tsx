@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { evidenceUrl, getOrder, grantGallery, orderRecords, reviewOrder, reviewPhoto, reviewResult, retryAnalysis, revokeGallery, type Evidence, type Order } from "../api";
+import { createAdminTest, evidenceUrl, getOrder, grantGallery, orderRecords, reviewOrder, reviewPhoto, reviewResult, retryAnalysis, revokeGallery, type Evidence, type Order } from "../api";
 import { groupsFor } from "../domain";
 import { colors, fonts } from "../theme";
 
 type Records = Awaited<ReturnType<typeof orderRecords>>;
-export function ReviewScreen({ order: initial, role, onBack }: { order: Order; role: string; onBack: () => void }) {
+export function ReviewScreen({ order: initial, role, onBack, onAdminTest }: { order: Order; role: string; onBack: () => void; onAdminTest: (order: Order) => void }) {
   const [order, setOrder] = useState(initial), [records, setRecords] = useState<Records | null>(null);
   const [note, setNote] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
   const [groupId, setGroupId] = useState(groupsFor(initial.site_type)[0]?.id ?? "");
@@ -28,6 +28,7 @@ export function ReviewScreen({ order: initial, role, onBack }: { order: Order; r
     <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="Review note / return reason" placeholderTextColor={colors.muted} multiline maxLength={2000} accessibilityLabel="Review note" />
     {message ? <Text style={styles.notice} accessibilityLiveRegion="polite">{message}</Text> : null}
     {action("Refresh", refresh)}
+    {role === "admin" ? <View style={styles.card}><Text style={styles.notice}>Remote testing creates a clearly marked copy. Test photos use your real GPS and cannot close the operational WO.</Text>{action("Start admin remote test", async () => onAdminTest(await createAdminTest(order)))}</View> : null}
     <Text style={styles.title}>Photos</Text>
     {records?.evidence.filter(e => e.state !== "Superseded").map(e => <View key={e.id} style={styles.card}>
       <Text style={styles.heading}>{e.group_id} · {e.state}</Text>

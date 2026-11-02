@@ -22,7 +22,7 @@ export type Order = {
   status: string;
   scheduled_start: string | null;
   scheduled_end: string | null;
-  inventory?: { generators?: number };
+  inventory?: { generators?: number; admin_test?: boolean; source_order_id?: string };
   site_reference?: { location?: string; site_status?: string; vendor?: string; district?: string };
   checklist?: import("../../shared/checklists").EvidenceGroup[];
   policy?: Record<string, unknown>;
@@ -199,4 +199,10 @@ export async function setGeneratorCount(order: Order, count: number) {
   const { data, error } = await client().rpc("pmr_set_generator_count", { p_order: order.id, p_expected_version: order.version, p_count: count });
   if (error) throw new Error(error.message);
   return data as Order;
+}
+
+export async function createAdminTest(order: Order) {
+ const { data, error } = await client().rpc("pmr_create_admin_test", { p_order: order.id });
+ if (error) throw new Error(error.message);
+ return data as Order;
 }

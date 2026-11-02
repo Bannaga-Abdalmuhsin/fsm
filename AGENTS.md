@@ -46,3 +46,5 @@ Before building common workspace or agent UI, read `agent-native-toolkit`; for s
 `mobile/` is a separate native Expo app using Supabase JWT/RPCs, not Agent-Native web auth. Native mutations go through the named API helpers in `mobile/src/api.ts` and authoritative SQL workflow functions. Never route native PMR data to the legacy web database or ship a service key.
 
 Primary operations: `pmr_membership`, `pmr_open_order`, `pmr_check_in`, `pmr_start_work`, `pmr_begin_capture`, `pmr_record_etl_result`, `pmr_submit_order`, `pmr_review_photo`, `pmr_review_result`, `pmr_review_order`, `pmr_grant_gallery_approval`, `pmr_set_team_member`, `pmr_promote_ready_schedules`, `pmr_save_quality_policy`. Photos use JWT-authenticated `evidence-ingest`; analysis retries use its JSON reanalyze operation. Preserve explicit pending/failed states. Release gates are in `docs/RELEASE_READINESS.md`.
+
+Remote admin tests use `pmr_create_admin_test` and the immutable `inventory.admin_test` marker. Never apply a test distance exception to an operational WO or hide test markings. Test orders cannot be submitted/approved.

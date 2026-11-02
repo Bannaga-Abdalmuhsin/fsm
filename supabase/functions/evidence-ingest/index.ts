@@ -79,8 +79,12 @@ Deno.serve(async(req)=>{
     analysis.quality={score,dimensions:dims,provisional:false,metrics};
     if(score<Number(order.policy?.review??75))findings.push({code:'quality_below_threshold',message:'Photo quality is below the configured minimum; retake required.',severity:'block',confidence:1});
   }
+  if(order.inventory?.admin_test && analysis.status==='complete') {
+    analysis.quality={...analysis.quality,provisional:true};
+    analysis.findings.push({code:'admin_remote_test',message:'Admin remote test only. Actual GPS retained; not operational PMR evidence.',severity:'review',confidence:1});
+  }
   const shifted=new Date(Date.parse(meta.captured_at)+3*3600000).toISOString();
-  const stamped=stampImage(image,[`${shifted.slice(0,10)} ${shifted.slice(11,19)} GMT+03:00`,`GPS ${Number(meta.gps.latitude).toFixed(6)}, ${Number(meta.gps.longitude).toFixed(6)} +/-${meta.gps.accuracy}M`,`SITE ${order.site_id} | WO ${order.wo} | TCN ${order.tcn}`,`GROUP ${group.id} | ETLS ${meta.linked_etls.join(',')}`,`TECH ${order.assignee} | TEAM ${order.team}`]);
+  const stamped=stampImage(image,[...(order.inventory?.admin_test ? ["ADMIN REMOTE TEST - NOT OPERATIONAL EVIDENCE"] : []),`${shifted.slice(0,10)} ${shifted.slice(11,19)} GMT+03:00`,`GPS ${Number(meta.gps.latitude).toFixed(6)}, ${Number(meta.gps.longitude).toFixed(6)} +/-${meta.gps.accuracy}M`,`SITE ${order.site_id} | WO ${order.wo} | TCN ${order.tcn}`,`GROUP ${group.id} | ETLS ${meta.linked_etls.join(',')}`,`TECH ${order.assignee} | TEAM ${order.team}`]);
   const derivativeSha=await sha256Hex(stamped),originalPath=objectPath(meta.order_id,meta.capture_id,mime,false),derivativePath=objectPath(meta.order_id,meta.capture_id,'image/jpeg',true);
   if (!reanalyze) { await storeOnce(client,originalPath,bytes,mime,sha);await storeOnce(client,derivativePath,stamped,'image/jpeg',derivativeSha); }
   const payload=buildPayload({meta,sha,derivativeSha,mime,originalPath,derivativePath,analysis,perceptualHash:metrics.perceptualHash});

@@ -16,7 +16,7 @@ beforeAll(async()=>{
  db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));
  await db.exec(`create table public.pmr_sites(site_id text primary key,location text,latitude float8,longitude float8,site_status text,site_type text,vendor text,region text,district text,source_id text,source_row int,refreshed_at timestamptz,validation_errors jsonb);
  create table public.pmr_schedule_rows(source_id text,sync_id uuid,source_tab text,source_row int,site_id text,region text,district text,scheduled_date date,tcn_number text,tcn_time text,team_name text,supervisor_name text,raw jsonb,state text default 'draft',validation_errors jsonb default '[]',order_id text,synced_at timestamptz default now(),site_reference jsonb,primary key(source_id,sync_id));`);
- for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql'])await db.exec(sql(file));
+ for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql'])await db.exec(sql(file));
  await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('a','admin@test','org','admin','["CR"]','[]'),('t','tech@test','org','technician','["CR"]','[]'),('l','lead@test','org','team_leader','["CR"]','["Team"]'),('r','rm@test','org','regional_manager','["CR"]','[]');`);
  await db.query(`insert into public.pmr_orders(id,owner_email,org_id,site_id,site_type,region,team,assignee,wo,tcn,month,latitude,longitude,scheduled_start,scheduled_end,tcn_start,tcn_end,inventory,checklist,policy,created_at,updated_at) values('wo','admin@test','org','SITE','ODU','CR','Team','tech@test','WO1','TCN1','2026-11',24.7,46.7,$1,$2,$1,$2,'{}',$3,$4,$1,$1)`,[start,end,JSON.stringify(checklists.ODU),JSON.stringify(defaultPolicy)]);
 },60000);
@@ -77,6 +77,20 @@ describe('native workflow enforcement',()=>{
   await as('lead@test');const result=(await db.query<{id:string;updated_at:string}>("select id,updated_at from public.pmr_results where order_id='wo'")).rows[0];
   await db.query("select public.pmr_review_result($1,$2,'returned','Repeat measurement')",[result.id,result.updated_at]);
   expect((await db.query<{status:string;version:number}>("select status,version from public.pmr_orders where id='wo'")).rows[0]).toEqual({status:'In progress',version:5});
+ });
+ it('allows only admins to create remote test copies and keeps live geofences intact',async()=>{
+  await as('tech@test');await expect(db.exec("select public.pmr_create_admin_test('wo')")).rejects.toThrow(/admin/);
+  await as('admin@test');const test=(await db.query<{o:{id:string;version:number;inventory:{admin_test:boolean}}}>("select public.pmr_create_admin_test('wo') o")).rows[0].o;
+  expect(test.inventory.admin_test).toBe(true);
+  const remote={...fix,latitude:30,timestamp:new Date().toISOString()};
+  await db.query("select public.pmr_check_in($1,1,$2)",[test.id,JSON.stringify(remote)]);
+  await db.query("select public.pmr_start_work($1,2)",[test.id]);
+  expect((await db.query<{c:{id:string}}>("select public.pmr_begin_capture($1,'O01',$2) c",[test.id,JSON.stringify({...remote,timestamp:new Date().toISOString()})])).rows[0].c.id).toBeTruthy();
+  await expect(db.query("update public.pmr_orders set status='Approved' where id=$1",[test.id])).rejects.toThrow(/Admin tests cannot/);
+  await expect(db.query("update public.pmr_orders set inventory='{}' where id=$1",[test.id])).rejects.toThrow(/immutable/);
+  await as('tech@test');
+  await expect(db.query("select public.pmr_open_order('wo',$1)",[JSON.stringify(remote)])).rejects.toThrow(/250 m/);
+await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.stringify(remote)])).rejects.toThrow(/not assigned/);
  });
  it('versions quality policies and refuses location weakening',async()=>{
   await as('admin@test');await expect(db.query('select public.pmr_save_quality_policy($1)',[JSON.stringify({...defaultPolicy,radius:500})])).rejects.toThrow(/cannot be relaxed/);

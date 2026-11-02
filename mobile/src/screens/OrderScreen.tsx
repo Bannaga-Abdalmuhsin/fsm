@@ -112,6 +112,7 @@ export function OrderScreen({ order, onBack, onCapture, onGallery, onOrderChange
         {order.region} · {order.team} · WO {order.wo ?? "pending"} · status {order.status}
       </Text>
 
+      {order.inventory?.admin_test ? <Text style={styles.message}>ADMIN REMOTE TEST — actual GPS recorded; no site-distance restriction. Cannot submit or approve as an operational PMR.</Text> : null}
       {tcnMissing ? (
         <View style={styles.gate}>
           <Text style={styles.gateTitle}>Capture blocked: TCN setup incomplete</Text>
@@ -142,7 +143,7 @@ export function OrderScreen({ order, onBack, onCapture, onGallery, onOrderChange
         <Action label="Refresh evidence and results" onPress={() => { void run("Refresh", refreshRecords); }} disabled={busy} />
         <Action label="Retry pending photo uploads" onPress={() => { void run("Upload", async () => { await retryEvidence(order.assignee); await refreshRecords(); }); }} disabled={busy} />
         {uploads.map(u => <Text key={u.evidenceId} style={styles.muted}>{u.groupId}: {u.uploadState}{u.lastError ? ` · ${u.lastError}` : ""}</Text>)}
-        {order.status === "In progress" ? <Action label="Submit PMR for review" onPress={() => { void run("Submit", async () => { await flushEvidence(order.assignee); await submitOrder(order); onOrderChanged(await getOrder(order.id)); }); }} disabled={busy} /> : null}
+        {order.status === "In progress" && !order.inventory?.admin_test ? <Action label="Submit PMR for review" onPress={() => { void run("Submit", async () => { await flushEvidence(order.assignee); await submitOrder(order); onOrderChanged(await getOrder(order.id)); }); }} disabled={busy} /> : null}
       </View>
       <Text style={styles.section}>Evidence groups ({groups.length})</Text>
       {groups.map((group) => {

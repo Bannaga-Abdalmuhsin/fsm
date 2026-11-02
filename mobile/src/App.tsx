@@ -136,6 +136,7 @@ export default function App() {
       setRoute({ name: "order", order: full });
     } catch (e) { setError((e as Error).message); }
   }
+  const remoteTest = membership.member.role === "admin" && (route.name === "order" || route.name === "capture") && route.order.inventory?.admin_test === true && route.order.assignee.toLowerCase() === email.toLowerCase();
   const team = route.name === "orders" || route.name === "admin" ? "" : route.order.team;
 
   return (
@@ -153,8 +154,8 @@ export default function App() {
           onAdmin={membership.member.role === "admin" ? () => setRoute({ name: "admin" }) : undefined}
         />
       ) : null}
-      {route.name === "order" && manager ? <ReviewScreen order={route.order} role={membership.member.role} onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
-      {route.name === "order" && !manager ? (
+      {route.name === "order" && manager && !remoteTest ? <ReviewScreen onAdminTest={(testOrder) => setRoute({ name: "order", order: testOrder })} order={route.order} role={membership.member.role} onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
+      {route.name === "order" && (!manager || remoteTest) ? (
         <OrderScreen
           order={route.order}
           onBack={() => setRoute({ name: "orders" })}

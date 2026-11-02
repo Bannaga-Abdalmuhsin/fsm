@@ -41,3 +41,7 @@ npm run bundle:android
 ```
 
 See [release readiness](docs/RELEASE_READINESS.md) for verified deployment state and the remaining operational setup/device checks. A successful bundle export is not an installed APK or a completed field acceptance test.
+
+## Admin remote tests
+
+Admins can review operational WOs remotely. To test the camera workflow remotely, choose **Start admin remote test** on an operational WO. The server creates an assigned, explicitly marked test copy with a 24-hour test window. Only the admin assignee can use its distance exception; accurate, fresh real GPS remains required. Test originals and stamped derivatives retain the actual location, carry an ADMIN REMOTE TEST banner and cannot be submitted or approved as operational PMRs. Technician geofences are unchanged. This UI requires mobile version 0.2.1 or newer.

@@ -60,7 +60,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
     if (!locationGranted || !clock) return;
     let active = true;
     getFix(clock.offsetMs).then((fix) => {
-      const gate = locationGate(fix, order, Date.now() + clock.offsetMs);
+      const gate = locationGate(fix, order.inventory?.admin_test ? { latitude: fix.latitude, longitude: fix.longitude } : order, Date.now() + clock.offsetMs);
       if (!gate.allowed) throw new Error(gate.reason ?? "Location check failed.");
       if (active) setSiteReady(true);
     }).catch((err: Error) => { if (active) setError(err.message); });
@@ -114,7 +114,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
         captureTimeGate(new Date(atMs).toISOString(), tcnStart, tcnEnd, new Date(serverNowMs()).toISOString());
 
       let fix = await getFix(offsetMs);
-      const gate = locationGate(fix, order, serverNowMs());
+      const gate = locationGate(fix, order.inventory?.admin_test ? { latitude: fix.latitude, longitude: fix.longitude } : order, serverNowMs());
       if (!gate.allowed) throw new Error(gate.reason ?? "Location check failed.");
       let authorization: Awaited<ReturnType<typeof beginCapture>>;
       let photo: { uri: string; width: number; height: number };
@@ -135,7 +135,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
         const lat = coordinate(exif.GPSLatitude), lng = coordinate(exif.GPSLongitude);
         if (exif.GPSLatitude == null || exif.GPSLongitude == null) throw new Error("Gallery image needs original EXIF GPS coordinates.");
         fix = { latitude: exif.GPSLatitudeRef === "S" ? -Math.abs(lat) : lat, longitude: exif.GPSLongitudeRef === "W" ? -Math.abs(lng) : lng, accuracy: 50, timestamp: new Date(capturedAtMs).toISOString() };
-        const originalGate = locationGate(fix, order, capturedAtMs);
+        const originalGate = locationGate(fix, order.inventory?.admin_test ? { latitude: fix.latitude, longitude: fix.longitude } : order, capturedAtMs);
         if (!originalGate.allowed) throw new Error(originalGate.reason ?? "Original photo GPS is outside this site.");
         photo = asset;
         authorization = await beginCapture(order.id, group.id, await getFix(offsetMs), galleryApproval);
@@ -160,6 +160,7 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
       const originalSha256 = await sha256Hex(original);
 
       const lines = [
+        ...(order.inventory?.admin_test ? ["ADMIN REMOTE TEST - NOT OPERATIONAL EVIDENCE"] : []),
         `${stampTime(capturedAtMs)}`,
         `GPS ${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)} ±${Math.round(fix.accuracy)} m`,
         `Site ${order.site_id} | WO ${order.wo ?? "pending"} | TCN ${order.tcn ?? "pending"}`,
