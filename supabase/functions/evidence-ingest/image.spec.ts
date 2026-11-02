@@ -30,6 +30,11 @@ describe('vision boundary',()=>{
    expect(result.findings[0]).toMatchObject({severity:'block',etls:[1]});expect(JSON.parse(fetcher.mock.calls[0][1].body).messages[1].content[1].image_url.url).toMatch(/^data:image\/jpeg;base64,/);
   }finally{vi.unstubAllGlobals();}
  });
+ it.each([{confidence:.99,outdoor_natural_light:true,expected:'block'},{confidence:.99,outdoor_natural_light:false,expected:'review'},{confidence:.8,outdoor_natural_light:true,expected:'review'}])('uses Riyadh time and blocks only high-confidence outdoor day/night mismatches: $expected',async({confidence,outdoor_natural_light,expected})=>{
+  const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({findings:[{code:'day_night_mismatch',message:'Lighting inconsistent with capture window',severity:'block',confidence,outdoor_natural_light,etls:[1]}],quality:{dimensions:{clarity:90,coverage:90,integrity:90}}})}}]})));
+  vi.stubGlobal('fetch',fetcher);
+  try{const result=await visionProvider({PMR_VISION_API_KEY:'synthetic-test-key',PMR_VISION_MODEL:'synthetic-model'},context)!.analyze({bytes:new Uint8Array([1]),mime:'image/jpeg',linkedEtls:[1]});expect(result.findings[0].severity).toBe(expected);expect(fetcher.mock.calls[0][1].body).toContain('2026-11-01T16:00:00.000+03:00');}finally{vi.unstubAllGlobals();}
+ });
  it('rejects fabricated or out-of-range model scores',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({choices:[{message:{content:'{"findings":[],"quality":{"dimensions":{"clarity":999,"coverage":90,"integrity":90}}}'}}]}))));
   try{await expect(visionProvider({PMR_VISION_API_KEY:'synthetic-test-key',PMR_VISION_MODEL:'synthetic-model'},context)!.analyze({bytes:new Uint8Array([1]),mime:'image/jpeg',linkedEtls:[1]})).rejects.toThrow(/validation/);}finally{vi.unstubAllGlobals();}
