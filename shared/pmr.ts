@@ -85,11 +85,21 @@ export function distanceMeters(
 }
 export function locationGate(
   fix: Geo,
-  site: Pick<Geo, "latitude" | "longitude">,
+  site: { latitude: number | null; longitude: number | null },
   now: number,
   policy = defaultPolicy,
 ) {
-  const distance = distanceMeters(fix, site),
+  if (site.latitude === null || site.longitude === null || !Number.isFinite(site.latitude) || !Number.isFinite(site.longitude)) {
+    return {
+      distance: null,
+      allowed: false,
+      reason: "Site coordinates are missing. Capture is blocked until the site location is corrected.",
+    };
+  }
+  if (!Number.isFinite(fix.latitude) || Math.abs(fix.latitude) > 90 || !Number.isFinite(fix.longitude) || Math.abs(fix.longitude) > 180 || !Number.isFinite(fix.accuracy) || fix.accuracy <= 0 || !Number.isFinite(Date.parse(fix.timestamp))) {
+    return { distance: null, allowed: false, reason: "Location fix is malformed." };
+  }
+  const distance = distanceMeters(fix, { latitude: site.latitude, longitude: site.longitude }),
     age = Math.abs(now - Date.parse(fix.timestamp));
   const reason =
     age > policy.maxFixAgeSeconds * 1000
@@ -107,6 +117,7 @@ export function captureTimeGate(
   end: string,
   uploadedAt: string,
 ) {
+  if (![capturedAt, start, end, uploadedAt].every((v) => Number.isFinite(Date.parse(v))) || Date.parse(end) <= Date.parse(start)) return "TCN window is missing or invalid.";
   const t = Date.parse(capturedAt);
   if (!Number.isFinite(t) || t > Date.parse(uploadedAt) + 120000)
     return "Capture time is invalid or in the future.";

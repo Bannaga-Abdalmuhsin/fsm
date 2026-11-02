@@ -41,3 +41,16 @@ learnings.md
 .vercel/
 .agent-native/
 data/*.lock
+
+# Native build outputs and signing files
+mobile/.expo/
+mobile/.export-check/
+*.ipa
+*.apk
+*.aab
+*.p12
+*.mobileprovision
+credentials.json
+deno.lock
+
+supabase/.temp/

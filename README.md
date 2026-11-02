@@ -1,74 +1,43 @@
-# FSM Performance Check
+# BM FSM PMR
 
-A private, responsive PMR evidence application for stc COW field operations. Technicians work through 67 ODU ETLs in 15 evidence groups or 144 shelter ETLs in 28 groups. Supervisors review original photographs, link visible evidence to ETLs, record conditions, and return or approve visits.
+Native Expo / React Native field-maintenance app for assigned COW site PMRs. The native app is in `mobile/`; the React Router application is the separate web administration workspace. The mobile app is not a WebView wrapper.
 
-## Implemented
+Technicians sign in with a Supabase-provisioned account, open assigned work orders within the 250 m site boundary, capture grouped photo evidence, record ETL results/readings/TT/NOC references, and submit for independent team-leader then regional-manager review. Catalogue: 67 ODU ETLs in 15 groups; 144 Shelter ETLs in 28 groups. A group may need multiple photos to show all required details. Photos do not prove alarm tests or electrical measurements by themselves.
 
-- Authenticated technician/supervisor/admin access, assigned-work and region checks; no automatic first-signup administrator.
-- WO, Site ID, separate TCN, schedule, PMR month and per-group equipment repetitions. Checklist and scoring snapshots are frozen on scheduling.
-- Site check-in and photo capture with a 250 m boundary that accounts for GPS accuracy and freshness. Original capture time is evaluated against the TCN window; delayed uploads do not change it.
-- In-app live camera, expiring admin gallery exceptions with row-locked usage limits, AES-GCM encrypted IndexedDB media/metadata drafts, retryable idempotent uploads.
-- Private blob originals, authenticated binary viewing, server-side image decoding, SHA-256, 64-bit perceptual hashes, clarity checks, historical reuse findings.
-- Optional actual OpenAI vision/OCR adapter: equipment matching, readable text, visible defects and daylight consistency. Missing/failed analysis stays pending. Manual review remains explicitly separate.
-- Explicit ETL results, readings/units, NOC/test references and corrective TT actions; source clarification blocks passing truncated requirements.
-- Mandatory submission coverage, review decisions, audit history, configurable/versioned score weights, JSON manifest, and printable visit report.
+## Run the native app
 
-## Run
-
-Use Node >=22.22 and the package manager in package.json.
-
-```bash
-pnpm install
-mkdir -p data
-pnpm db:migrate
-pnpm dev --host 127.0.0.1
+```sh
+cd mobile
+npm ci
+# Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+npx expo start
 ```
 
-The framework uses local PGlite for development. Production requires persistent PostgreSQL `DATABASE_URL`, stable authentication secrets, HTTPS and configured private file storage. Authentication must remain enabled. Apply migrations before serving the new version.
+Internal Android APK: `npx eas-cli@latest build --platform android --profile preview` from `mobile/`. The preview profile creates an APK. iOS internal distribution requires registered devices and Apple signing credentials; the production profile is for store distribution. Expo Go is a development client, not an APK builder.
 
-## Provision access
+Never put Supabase secret/service-role keys, vision API keys, Apple certificates or Expo access tokens in `EXPO_PUBLIC_*`, source control, or the phone bundle.
 
-An authorized deployment operator must first verify the account and organization membership, then run:
+## Backend
 
-```bash
-node --import tsx scripts/provision-pmr.ts email=verified-user@example.invalid role=admin regions=CR,ER org=existing-org-id
-```
+Supabase Auth, Postgres RPC/RLS and private `pmr-evidence` storage enforce identity, scope, capture authorization, workflow versions, gallery exceptions and sequential review. `supabase/functions/evidence-ingest/` validates actual image bytes, derives image hashes/metrics, preserves the original, renders a server-generated Riyadh/GPS footer and registers signed results. Durable on-device uploads retry failures without replacing originals.
 
-Use the actual verified address and existing organization ID. Provision technicians and supervisors the same way with their correct regions. Omit `org` for personal scope: managers see work they create and technicians see explicitly assigned work. Personal scopes do not create a shared regional catalogue. Sign-in alone does not grant PMR access.
+Deploy `evidence-ingest` with JWT verification enabled. Supabase supplies its standard server environment. Server-only vision settings are `PMR_VISION_API_KEY`, `PMR_VISION_MODEL`, and optional HTTPS `PMR_VISION_ENDPOINT` (OpenAI-compatible chat-completions endpoint). Without a configured working provider, evidence remains **Pending analysis** and cannot pass review. Model findings require field calibration; image appearance cannot conclusively prove manipulation or day/night fraud.
 
-## Connect storage and AI
+SQL installation order on the existing PMR reference schema: `supabase/rls.sql`, migrations `0002`, `0003`, `0004`, `supabase/checklist-catalogue.sql`, `supabase/membership-live.sql`, then the timestamped `generator_instances` migration. Do not reapply the baseline policies blindly. The deployed migration history is authoritative. `supabase/schedule-sync.sql` retains the existing separately token-authenticated Sheets ingestion contract. The public source uses `<SCHEDULE_SHEET_ID>` and `<CMDB_SHEET_ID>` setup placeholders. Resolve these only in the private deployment copy; do not commit private identifiers. Do not replace the existing configured live script with the unconfigured template. Sync secrets belong only in Apps Script properties.
 
-The shared Settings interface exposes the framework connection/API-key controls. Configure a supported private blob provider or an authorized Builder file-storage connection. Never upload plaintext operational images to a public bucket. This app stores opaque handles, not image payloads in SQL.
+## Schedule workflow
 
-Optional vision uses the registered **PMR_OPENAI_API_KEY** user-scoped secret. Enter it through the framework API-key settings, never source control or chat. Configuring it enables transmission of captured PMR images to OpenAI for analysis; only do so after the organization approves that processing. No key is bundled. Without it, supervisors can perform a documented manual review, and the numeric photo score stays provisional for unperformed dimensions. The model adapter is in `server/pmr/image.ts`.
-
-## Operational limits and commissioning
-
-This is a responsive web application, not a signed native APK. Browser camera, GPS and device-clock values are client-reported. The application cannot guarantee camera provenance, detect all edits/GPS spoofing, or independently attest offline capture time. A managed native camera/location/attestation integration is needed for stronger assurance. It never claims a photograph proves electrical or mechanical test completion. Follow authorized site procedures and do not perform disruptive tests or suppression discharge based on this app.
-
-Gallery imports remain marked for time/location-provenance review. Daylight conflicts use confident outdoor recognition plus calculated sun position; indoor/floodlit/flash scenes are excluded. Perceptual similarity creates review, not a fraud verdict. Visible watermark time/GPS inconsistencies and suspected edits are recorded when vision can read them; this is not forensic authentication. Historical similarity scan is currently bounded to 5,000 accessible photos and flags when that limit is reached; add a dedicated similarity index before fleet-scale operation.
-
-Shelter source wording comes from the supplied checklist. ODU descriptions are working transcriptions of the supplied ETLs. Truncated source entries remain flagged. Confirm the official complete wording and IFSM evidence/attachment rules before rollout. A group may need several angles; no photo-count cap or automatic IFSM submission is claimed. The printable report, CSV and JSON manifest contain the complete visit.
-
-Offline drafts survive reload on the same origin/device but are not a substitute for synchronized server backups. Clearing browser storage removes unsynced drafts. Keys are non-exportable browser CryptoKeys, protected by the same origin, not by independent device hardware. Check-in currently requires connectivity. No operational photos, storage credentials, AI key, or admin account have been provisioned as part of source delivery.
+Apps Script syncs CMDB first, then schedule staging every ten minutes. CMDB is authoritative for site type, GPS and reference details. A schedule becomes a WO only when CMDB, unique WO number, TCN number/window, date and an unambiguous provisioned technician/team mapping are complete. Duplicates remain conflicts. Started WOs keep frozen snapshots; source changes do not silently rewrite active visits. Never invent missing times, WOs or emails to make rows ready.
 
 ## Verification
 
-```bash
+```sh
+pnpm exec vitest run shared scripts/apps-script supabase
 pnpm typecheck
 pnpm agent-native:doctor
-pnpm exec vitest run shared/pmr.spec.ts --pool=threads
-node --import tsx scripts/smoke-pmr.ts
-node --import tsx scripts/check-image.ts
-node --import tsx scripts/smoke-upload.ts
+cd mobile
+npm run typecheck
+npm run bundle:android
 ```
 
-Smoke scripts use clearly synthetic data and remove their fixtures. Run them against an isolated local database, never production. Field-device camera/GPS, storage-provider roundtrip, AI equipment/OCR accuracy and a full authenticated mobile walkthrough still require commissioning with approved configuration.
-
-## GitHub Pages interactive preview
-
-`pnpm run build:pages` builds the existing screens with a separate in-memory sample adapter into `docs/`. The public preview has a permanent demo banner, sample work orders and the full ETL catalogue. Real camera/gallery uploads, device GPS, authentication, storage and AI requests are disabled in this preview. Its illustrated evidence scores are predefined examples, not analysis results. Reloading or resetting clears demo changes.
-
-To publish the committed preview, open repository **Settings → Pages**, select **Deploy from a branch**, then choose **main** and **/docs**, and save. GitHub Pages hosts this static demo; the authenticated operational app still needs its server deployment. Keep production photographs and credentials out of `docs/` and `preview/`.
-
-Source entry: `preview/main.tsx`. Preview build configuration: `vite.pages.config.ts`. Production action/photo helpers are direct server-transport helpers; only the standalone preview build substitutes them. Refreshing a demo URL works through hash routing.
+See [release readiness](docs/RELEASE_READINESS.md) for verified deployment state and the remaining operational setup/device checks. A successful bundle export is not an installed APK or a completed field acceptance test.

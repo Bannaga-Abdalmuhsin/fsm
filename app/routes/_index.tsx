@@ -1,175 +1,92 @@
-import {
-  IconArrowUpRight,
-  IconMapPin,
-  IconPlus,
-  IconSearch,
-  IconCalendar,
-  IconShieldCheck,
-} from "@tabler/icons-react";
+import { canManage, type Member } from "@shared/access";
+import { formatTime } from "@shared/pmr";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { CreateOrder } from "@/components/pmr/CreateOrder";
-import { Shell, Badge, Empty } from "@/components/pmr/Shell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useActionQuery } from "@/lib/pmr-actions";
+import { Card, Notice, Page, RequireMember } from "@/components/pmr/pmr-shell";
+import { APP_TITLE } from "@/lib/app-config";
+import { fetchOrders } from "@/lib/pmr-api";
 
-import { formatTime } from "../../shared/pmr";
 export function meta() {
-  return [{ title: "Work orders · FSM Performance Check" }];
+  return [
+    { title: APP_TITLE },
+    { name: "description", content: "Preventive maintenance work orders" },
+  ];
 }
-export default function Home() {
-  const query = useActionQuery("get-pmr-dashboard", {});
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All visits");
-  const [create, setCreate] = useState(false);
-  const data = query.data;
-  const rows = (data?.orders ?? []).filter(
-    (o) =>
-      `${o.siteId} ${o.wo} ${o.tcn} ${o.team}`
-        .toLowerCase()
-        .includes(search.toLowerCase()) &&
-      (filter === "All visits" || o.status === filter),
-  );
+
+export default function HomeRoute() {
+  return <RequireMember render={(member) => <Dashboard member={member} />} />;
+}
+
+function Dashboard({ member }: { member: Member }) {
+  const [filter, setFilter] = useState("");
+  const { data, error, isLoading } = useQuery({
+    queryKey: ["orders", member.ownerEmail],
+    queryFn: () => fetchOrders(member),
+  });
+
+  const orders = (data ?? []).filter((order) => {
+    const q = filter.trim().toLowerCase();
+    return (
+      !q ||
+      [order.wo, order.tcn, order.siteId].some((v) =>
+        v.toLowerCase().includes(q),
+      )
+    );
+  });
+
   return (
-    <>
-      <div className="pmr-page-heading">
-        <div>
-          <h1>Every visit. Verified.</h1>
-          <p>Site maintenance, supported by trusted evidence.</p>
-        </div>
-        {["admin", "supervisor"].includes(data?.user.role ?? "") && (
-          <Button onClick={() => setCreate(true)}>
-            <IconPlus size={18} />
-            Schedule PMR
-          </Button>
-        )}
-      </div>
-      <section className="pmr-intro">
-        <div>
-          <Badge tone="purple">PMR EVIDENCE CONTROL</Badge>
-          <h2>
-            Better evidence.
-            <br />
-            Fewer repeat visits.
-          </h2>
-          <p>
-            Capture by equipment group. Complete every check.
-            <br />
-            Keep your work ready for review.
-          </p>
-          <Link to="/checklists">
-            Explore the PMR checklist <IconArrowUpRight size={17} />
-          </Link>
-        </div>
-        <div className="pmr-intro-visual">
-          <div className="pmr-visual-ring">
-            <IconShieldCheck size={64} stroke={1.3} />
-          </div>
-          <span>250 m site verification</span>
-          <small>Camera capture · Traceable review</small>
-        </div>
-      </section>
-      <div className="pmr-toolbar">
-        <div className="pmr-search">
-          <IconSearch size={18} />
-          <Input
-            aria-label="Search work orders"
-            placeholder="Search site, WO, TCN or team"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          aria-label="Filter visit status"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          {[
-            "All visits",
-            "Assigned",
-            "In progress",
-            "Submitted",
-            "Returned",
-            "Approved",
-          ].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      {query.isLoading ? (
-        <div className="pmr-order-grid">
-          {[1, 2, 3].map((n) => (
-            <Skeleton key={n} className="h-56 rounded-xl" />
-          ))}
-        </div>
-      ) : query.error ? (
-        <p className="pmr-error" role="alert">
-          {query.error.message}
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Retry
-          </Button>
-        </p>
-      ) : data?.user.role === "unassigned" ? (
-        <Empty title="Your workspace is ready for setup">
-          An authorized operator must provision your PMR role before work orders
-          are available. Sign-in alone does not grant administration access.
-        </Empty>
-      ) : rows.length ? (
-        <div className="pmr-order-grid">
-          {rows.map((o) => (
-            <Link className="pmr-order-card" key={o.id} to={`/orders/${o.id}`}>
-              <div className="pmr-row pmr-between">
-                <span className="pmr-site-icon">
-                  <IconMapPin size={22} />
-                </span>
-                <Badge
-                  tone={
-                    o.status === "Approved"
-                      ? "green"
-                      : o.status === "Returned"
-                        ? "orange"
-                        : "purple"
-                  }
-                >
-                  {o.status}
-                </Badge>
-              </div>
-              <h2>{o.siteId}</h2>
-              <span className="pmr-hint">
-                {o.siteType === "ODU" ? "Outdoor unit" : "Shelter"} · {o.region}{" "}
-                · {o.team}
-              </span>
-              <dl>
-                <div>
-                  <dt>WORK ORDER</dt>
-                  <dd>{o.wo}</dd>
-                </div>
-                <div>
-                  <dt>TCN</dt>
-                  <dd>{o.tcn}</dd>
-                </div>
-              </dl>
-              <div className="pmr-card-foot">
-                <span>
-                  <IconCalendar size={15} />
-                  {formatTime(o.scheduledStart)}
-                </span>
-                <IconArrowUpRight size={20} />
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <Empty title="No visits to show">
-          {search
-            ? "Try a different site, WO or ticket number."
-            : "Scheduled PMR visits will appear here when assigned to your team."}
-        </Empty>
+    <Page
+      title={
+        canManage(member)
+          ? "Work orders in your regions"
+          : "Assigned work orders"
+      }
+    >
+      <input
+        aria-label="Search work orders"
+        value={filter}
+        onChange={(event) => setFilter(event.target.value)}
+        placeholder="Search by WO, TCN or site"
+        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+      />
+      {error && <Notice>{(error as Error).message}</Notice>}
+      {isLoading && (
+        <p className="text-sm text-muted-foreground">Loading work orders…</p>
       )}
-      <CreateOrder open={create} onClose={() => setCreate(false)} />
-    </>
+      {!isLoading && !error && orders.length === 0 && (
+        <Card>
+          <p className="text-sm text-muted-foreground">No work orders match.</p>
+        </Card>
+      )}
+      <ul className="space-y-3">
+        {orders.map((order) => (
+          <li key={order.id}>
+            <Link to={`/orders/${order.id}`} className="block">
+              <Card>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      WO {order.wo} · {order.siteId}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {order.siteType} · {order.region} · {order.team}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      TCN {order.tcn}: {formatTime(order.tcnStart)} –{" "}
+                      {formatTime(order.tcnEnd)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs">
+                    {order.status}
+                  </span>
+                </div>
+              </Card>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Page>
   );
 }

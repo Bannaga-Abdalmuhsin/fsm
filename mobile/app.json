@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "BM FSM PMR",
+    "slug": "bm-fsm-pmr",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "scheme": "bmfsmpmr",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#06140F",
+    "ios": {
+      "bundleIdentifier": "com.businessmagnificence.fsm",
+      "supportsTablet": false,
+      "buildNumber": "2"
+    },
+    "android": {
+      "package": "com.businessmagnificence.fsm",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#06140F"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "versionCode": 2
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow BM FSM PMR to use the camera to capture PMR evidence photos.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow BM FSM PMR to verify you are inside the site boundary when capturing evidence."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow photo access only for an administrator-approved PMR import.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f9f0c87f-8603-4126-93c4-bca58825ce13"
+      }
+    },
+    "owner": "bannaga6343"
+  }
+}
