@@ -55,3 +55,7 @@ The light native interface supports English, Hindi, Urdu and Arabic (with right-
 Office users can export a scoped WO ZIP containing authoritative stamped photos, a printable HTML report, an Excel-compatible ETL CSV and a JSON evidence manifest. Extract the ZIP and open report.html to view or print to PDF. Exporting never changes approval status or submits to stc. Test and unapproved reports remain prominently marked. Export limits: 250 photos / 60 MB.
 
 Deploy the simple_group_submissions_profiles_export migration and JWT-protected submission-export function before installing this version. New native modules require a new internal build.
+
+### Capture recovery (mobile 0.3.1)
+
+Photo groups count both local captures and uploaded evidence, without double counting. Local captures display Photo taken with Recapture and a pending/retry upload action. Completion of the persisted upload queue refreshes the visit immediately. Expo uploads pass File objects to expo/fetch; legacy URI-only multipart objects are unsupported by SDK 58. Captures are resolved from the current documents directory, so an iOS app update that changes its sandbox path does not strand saved photos. Missing originals require recapture; they are never reconstructed or silently accepted. A replacement preserves the missing capture metadata and stops its futile retries.

@@ -101,7 +101,16 @@ export const catalogs = {
   "group.Interior & housekeeping": "Interior & housekeeping",
   "group.Access & passive alarms": "Access & passive alarms",
   "group.Generator room": "Generator room",
-  "group.Truck & visual issues": "Truck & visual issues"
+  "group.Truck & visual issues": "Truck & visual issues",
+  "photoTaken": "Photo taken",
+  "recapture": "Recapture",
+  "noPhoto": "No photo yet",
+  "submitPhoto": "Submit photo",
+  "retryPhoto": "Retry upload",
+  "photoUploaded": "Uploaded",
+  "uploadPending": "Upload pending",
+  "uploadFailed": "Upload needs attention",
+  "uploading": "Uploading…"
  },
  "hi": {
   "back": "वापस",
@@ -201,7 +210,16 @@ export const catalogs = {
   "group.Interior & housekeeping": "आंतरिक क्षेत्र और साफ़-सफ़ाई",
   "group.Access & passive alarms": "एक्सेस और पैसिव अलार्म",
   "group.Generator room": "जनरेटर कक्ष",
-  "group.Truck & visual issues": "ट्रक और दृश्य समस्याएँ"
+  "group.Truck & visual issues": "ट्रक और दृश्य समस्याएँ",
+  "photoTaken": "फ़ोटो ली गई",
+  "recapture": "दोबारा फ़ोटो लें",
+  "noPhoto": "अभी कोई फ़ोटो नहीं",
+  "submitPhoto": "फ़ोटो भेजें",
+  "retryPhoto": "अपलोड फिर करें",
+  "photoUploaded": "अपलोड हो गई",
+  "uploadPending": "अपलोड लंबित",
+  "uploadFailed": "अपलोड पर ध्यान दें",
+  "uploading": "अपलोड हो रही है…"
  },
  "ur": {
   "back": "واپس",
@@ -301,7 +319,16 @@ export const catalogs = {
   "group.Interior & housekeeping": "اندرونی علاقہ اور صفائی",
   "group.Access & passive alarms": "رسائی اور غیر فعال الارمز",
   "group.Generator room": "جنریٹر کا کمرہ",
-  "group.Truck & visual issues": "ٹرک اور ظاہری مسائل"
+  "group.Truck & visual issues": "ٹرک اور ظاہری مسائل",
+  "photoTaken": "تصویر لے لی گئی",
+  "recapture": "دوبارہ تصویر لیں",
+  "noPhoto": "ابھی تصویر نہیں",
+  "submitPhoto": "تصویر بھیجیں",
+  "retryPhoto": "اپ لوڈ دوبارہ کریں",
+  "photoUploaded": "اپ لوڈ ہو گئی",
+  "uploadPending": "اپ لوڈ باقی ہے",
+  "uploadFailed": "اپ لوڈ میں مسئلہ ہے",
+  "uploading": "اپ لوڈ ہو رہی ہے…"
  },
  "ar": {
   "back": "رجوع",
@@ -401,7 +428,16 @@ export const catalogs = {
   "group.Interior & housekeeping": "المرافق الداخلية والنظافة",
   "group.Access & passive alarms": "الدخول والإنذارات السلبية",
   "group.Generator room": "غرفة المولد",
-  "group.Truck & visual issues": "الشاحنة والملاحظات المرئية"
+  "group.Truck & visual issues": "الشاحنة والملاحظات المرئية",
+  "photoTaken": "تم التقاط الصورة",
+  "recapture": "إعادة التصوير",
+  "noPhoto": "لم تُلتقط صورة بعد",
+  "submitPhoto": "إرسال الصورة",
+  "retryPhoto": "إعادة رفع الصورة",
+  "photoUploaded": "تم الرفع",
+  "uploadPending": "بانتظار الرفع",
+  "uploadFailed": "توجد مشكلة في الرفع",
+  "uploading": "جارٍ الرفع…"
  }
 } as const;
 type Key = keyof typeof catalogs.en;

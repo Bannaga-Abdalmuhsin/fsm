@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions, type CameraCapturedPicture } from "ex
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
-import { flushEvidence } from "../uploadQueue";
+import { replaceMissingCaptures, flushEvidence } from "../uploadQueue";
 import { captureRef } from "react-native-view-shot";
 
 import { captureTimeGate, locationGate } from "../../../shared/pmr";
@@ -197,12 +197,13 @@ export function CaptureScreen({ order, group, email, team, galleryApproval, onDo
         phoneTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         clockOffset: clock,
         gps: { ...fix, distanceMeters: gate.distance, maxAccuracyMeters, siteRadiusMeters },
-        original: { path: original.uri, sha256: originalSha256 },
-        derivative: { path: derivative.uri, sha256: derivativeSha256, stampLines: lines },
+        original: { path: "original.jpg", sha256: originalSha256 },
+        derivative: { path: "derivative.jpg", sha256: derivativeSha256, stampLines: lines },
         uploadState: "queued",
         derivativeNote: "App-generated stamp. It does not prove the original is unmodified.",
       };
       await new File(dir, "metadata.json").write(JSON.stringify(metadata, null, 2));
+      await replaceMissingCaptures(email,order.id,group.id,id);
       setStamp(null);
       setSaved(t("photoQueued"));
       void flushEvidence(email);

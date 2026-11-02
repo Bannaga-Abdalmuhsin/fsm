@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
 import { supabase } from "./supabase";
 import { supabasePublishableKey, supabaseUrl } from "./config";
 import { sha256Hex } from "./evidence";
@@ -11,11 +12,15 @@ export type LocalEvidence = {
   gps: { latitude: number; longitude: number; accuracy: number; timestamp: string };
   original: { path: string; sha256: string }; derivative: { path: string; sha256: string };
   uploadState: "queued" | "uploading" | "uploaded" | "blocked" | "retry" | "pending_backend_ingest";
+  supersededBy?: string;
   attempts?: number; nextAttemptAt?: number; lastError?: string; uploadedAt?: string;
 };
 export const retryDelay = (attempt: number) => Math.min(300000, 2000 * 2 ** Math.min(attempt, 8));
 const root = () => new Directory(Paths.document, "evidence");
 let running: Promise<void> | null = null;
+const listeners = new Set<(email:string)=>void>();
+export function subscribeEvidence(listener:(email:string)=>void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
+
 
 export async function queuedEvidence(email: string): Promise<LocalEvidence[]> {
   if (!root().exists) return [];
@@ -27,7 +32,7 @@ export async function queuedEvidence(email: string): Promise<LocalEvidence[]> {
     if (!file.exists) continue;
     try {
       const row = JSON.parse(await file.text()) as LocalEvidence;
-      if (row.technician?.toLowerCase() === email.toLowerCase()) result.push(row);
+      if (row.technician?.toLowerCase() === email.toLowerCase()) result.push({ ...row, original: { ...row.original, path: new File(dir, "original.jpg").uri }, derivative: { ...row.derivative, path: new File(dir, "derivative.jpg").uri } });
     } catch { /* A partial local record is never uploaded. Original files remain for recovery. */ }
   }
   return result.sort((a, b) => a.capturedAtUtc.localeCompare(b.capturedAtUtc));
@@ -39,11 +44,12 @@ async function save(row: LocalEvidence) {
   const current = new File(dir, "metadata.json");
   if (current.exists) current.delete();
   pending.move(current);
+  for (const listener of listeners) listener(row.technician);
 }
-export async function retryEvidence(email: string) {
+export async function retryEvidence(email: string, groupId?: string, orderId?: string) {
   if (running) await running;
   for (const row of await queuedEvidence(email)) {
-    if (row.uploadState !== "uploaded") await save({ ...row, uploadState: "queued", nextAttemptAt: 0 });
+    if (!row.supersededBy && row.uploadState !== "uploaded" && (!groupId || row.groupId === groupId) && (!orderId || row.orderId === orderId)) await save({ ...row, uploadState: "queued", nextAttemptAt: 0 });
   }
   await flushEvidence(email);
 }
@@ -57,13 +63,14 @@ async function drain(email: string) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session || session.user.email?.toLowerCase() !== email.toLowerCase()) return;
   for (const row of await queuedEvidence(email)) {
-    if (row.uploadState === "uploaded" || row.uploadState === "blocked" || (row.nextAttemptAt ?? 0) > Date.now()) continue;
+    if (row.supersededBy || row.uploadState === "uploaded" || row.uploadState === "blocked" || (row.nextAttemptAt ?? 0) > Date.now()) continue;
     const attempts = (row.attempts ?? 0) + 1;
     await save({ ...row, uploadState: "uploading", attempts });
     let retryable = true;
     try {
-      if (!row.width || !row.height) throw new Error("This older capture needs to be retaken: image dimensions missing.");
+      if (!row.width || !row.height) { retryable = false; throw new Error("Retake required: this older capture has no image dimensions."); }
       const original = new File(row.original.path), stamped = new File(row.derivative.path);
+      if (!original.exists || !stamped.exists) { retryable = false; throw new Error("Retake required: the original or stamped photo is no longer on this device."); }
       if (await sha256Hex(original) !== row.original.sha256 || await sha256Hex(stamped) !== row.derivative.sha256) {
         retryable = false;
         throw new Error("Local photo changed after capture. Retake this photo.");
@@ -76,9 +83,9 @@ async function drain(email: string) {
         captured_at_source: row.capturedAtSource ?? "device-camera", gps: row.gps,
         linked_etls: row.linkedEtls, width: row.width, height: row.height,
       }));
-      form.append("original", { uri: original.uri, name: "original.jpg", type: "image/jpeg" } as unknown as Blob);
-      form.append("stamped", { uri: stamped.uri, name: "stamped.jpg", type: "image/jpeg" } as unknown as Blob);
-      const response = await fetch(`${supabaseUrl}/functions/v1/evidence-ingest`, {
+      form.append("original", original);
+      form.append("stamped", stamped);
+      const response = await expoFetch(`${supabaseUrl}/functions/v1/evidence-ingest`, {
         method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, apikey: supabasePublishableKey },
         body: form, signal: AbortSignal.timeout(90000),
       });
@@ -93,4 +100,13 @@ async function drain(email: string) {
         nextAttemptAt: Date.now() + retryDelay(attempts), lastError: (error as Error).message.slice(0, 300) });
     }
   }
+}
+
+// Retaking an unrecoverable local capture preserves its metadata, but stops futile retries.
+// Uploaded evidence and recoverable originals are never removed or replaced here.
+export async function replaceMissingCaptures(email:string,orderId:string,groupId:string,replacementId:string) {
+ for (const row of await queuedEvidence(email)) {
+  if(row.orderId!==orderId||row.groupId!==groupId||row.evidenceId===replacementId||row.uploadState==='uploaded'||row.supersededBy)continue;
+  if(!new File(row.original.path).exists||!new File(row.derivative.path).exists)await save({...row,supersededBy:replacementId});
+ }
 }

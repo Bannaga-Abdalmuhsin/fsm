@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { groupPhotoState } from "../groupPhotoState";
 import {File,Paths} from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { setGeneratorCount,checkIn,startWork,saveGroup,orderRecords,getOrder,submitOrder,type EtlStatus,type Measurements,type Order } from "../api";
-import { flushEvidence,queuedEvidence,retryEvidence,type LocalEvidence } from "../uploadQueue";
+import { flushEvidence,queuedEvidence,retryEvidence,subscribeEvidence,type LocalEvidence } from "../uploadQueue";
 import { getFix,measureClockOffset } from "../evidence";
 import { groupsFor,tcnWindowMissing,type EvidenceGroup } from "../domain";
 import { colors,fonts } from "../theme";
@@ -27,6 +28,8 @@ export function OrderScreen({order,onBack,onCapture,onGallery,onOrderChanged}:Pr
  async function run(fn:()=>Promise<void>){setBusy(true);setMessage("");try{await fn();}catch(e){setMessage((e as Error).message)}finally{setBusy(false)}}
  async function start(){let current=order;if(current.status==='Assigned'){await checkIn(current,await getFix((await measureClockOffset()).offsetMs));current=await getOrder(current.id);onOrderChanged(current);}await startWork(current);onOrderChanged(await getOrder(current.id));}
  async function save(g:EvidenceGroup){const d=drafts[g.id]??empty();if(!d.status)throw new Error(t('status'));const values:Measurements={};for(const [key]of fields){const raw=d.values[key]?.trim();if(raw){const n=Number(raw.replace(',','.'));if(!Number.isFinite(n))throw new Error(t('readingsHelp'));values[key]=n;}}await saveGroup(order.id,g.id,d.status,d.remarks,values,records?.groups.find(r=>r.group_id===g.id)?.revision??0);await refresh();setMessage(t('saved'));}
+ // Refresh on persisted queue transitions, including completion of background uploads.
+ useEffect(()=>subscribeEvidence(email=>{if(email.toLowerCase()===order.assignee.toLowerCase())void refresh().catch(()=>{});}),[order.id,order.assignee]);
  const complete=records?.groups.length??0;
  return <ScrollView style={s.root} contentContainerStyle={{paddingBottom:70,gap:14,direction:rtl?'rtl':'ltr'}} keyboardShouldPersistTaps="handled">
   <Pressable onPress={onBack} style={s.back} accessibilityRole="button"><Text style={s.link}>‹ {t('back')}</Text></Pressable>
@@ -39,12 +42,12 @@ export function OrderScreen({order,onBack,onCapture,onGallery,onOrderChanged}:Pr
   {order.status==='Assigned'?<View style={s.card}><Text style={s.muted}>{t("generators")}</Text><TextInput accessibilityLabel="Generator count" value={generators} onChangeText={setGenerators} keyboardType="number-pad" style={s.input}/><Button label={t("saveEquipment")} disabled={busy} secondary onPress={()=>void run(async()=>{onOrderChanged(await setGeneratorCount(order,Number(generators)));})}/></View>:null}
   {['Assigned','Checked in'].includes(order.status)?<Button label={t('start')} disabled={busy||tcnWindowMissing(order)} onPress={()=>void run(start)}/>:null}
   {message?<Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>:null}
-  {groups.map((g,i)=>{const d=drafts[g.id]??empty(),saved=records?.groups.find(r=>r.group_id===g.id),photos=records?.evidence.filter(e=>e.group_id===g.id&&e.state!=='Superseded')??[],isOpen=open===g.id;
+  {groups.map((g,i)=>{const d=drafts[g.id]??empty(),saved=records?.groups.find(r=>r.group_id===g.id),photos=records?.evidence.filter(e=>e.group_id===g.id&&e.state!=='Superseded')??[],isOpen=open===g.id;const photo=groupPhotoState(g.id,uploads,records?.evidence??[]);
    return <View key={g.id} style={s.card}>
-    <Pressable onPress={()=>setOpen(isOpen?null:g.id)} accessibilityRole="button" accessibilityState={{expanded:isOpen}} style={s.row}><View style={s.number}><Text style={s.link}>{String(i+1).padStart(2,'0')}</Text></View><View style={{flex:1}}><Text style={s.title}>{localizedGroupTitle(g.title,locale)}</Text><Text style={s.muted}>{photos.length} {t('photo')} · {saved?t(saved.status):t('pending')}</Text></View><Ionicons name={isOpen?'chevron-up':'chevron-down'} size={20} color={colors.muted}/></Pressable>
+    <Pressable onPress={()=>setOpen(isOpen?null:g.id)} accessibilityRole="button" accessibilityState={{expanded:isOpen}} style={s.row}><View style={s.number}><Text style={s.link}>{String(i+1).padStart(2,'0')}</Text></View><View style={{flex:1}}><Text style={s.title}>{localizedGroupTitle(g.title,locale)}</Text><Text style={s.muted}>{photo.taken?`${t('photoTaken')} · ${photo.count}`:t('noPhoto')}</Text><Text style={s.muted}>{t('status')}: {saved?t(saved.status):t('pending')}</Text></View><Ionicons name={isOpen?'chevron-up':'chevron-down'} size={20} color={colors.muted}/></Pressable>
     {isOpen?<View style={{gap:14}}>
-     <Button icon="camera-outline" label={t('capture')} disabled={busy||!editable||!ready} onPress={()=>onCapture(g)}/>
-     <Text style={s.muted}>{t('cameraHelp')}</Text>
+     <Button icon="camera-outline" label={photo.taken?t('recapture'):t('capture')} disabled={busy||!editable||!ready} onPress={()=>onCapture(g)}/>
+     {photo.taken?<View style={{gap:8}}><Text style={s.notice}>✓ {t('photoTaken')} · {photo.requiresRetake?t('Retake required'):photo.uploaded?t('photoUploaded'):photo.failed?t('uploadFailed'):t('uploadPending')}</Text>{photo.pending.length&&!photo.requiresRetake?<Button label={photo.uploading?t('uploading'):photo.failed?t('retryPhoto'):t('submitPhoto')} disabled={busy||photo.uploading} onPress={()=>void run(async()=>{await retryEvidence(order.assignee,g.id,order.id);await refresh();})}/>:null}{photo.failed?<Text style={s.error}>{photo.pending.find(e=>e.lastError)?.lastError}</Text>:null}</View>:<Text style={s.muted}>{t('cameraHelp')}</Text>}
      {photos.map(e=><Text key={e.id} style={e.state==='Retake required'?s.error:s.muted}>{["Pending analysis","Retake required","Supervisor review","Accepted"].includes(e.state)?t(e.state as "Accepted"):e.state}{e.quality?.score!=null?` · ${e.quality.score}%`:''}</Text>)}
      {records?.approvals.filter(a=>!a.revoked_at&&a.groups.includes(g.id)&&a.used<a.max_images&&Date.parse(a.expires_at)>Date.now()).map(a=><Button key={a.id} secondary label={t("gallery")} disabled={busy||!editable} onPress={()=>onGallery(g,a.id)}/>)}
      <Text style={s.label}>{t('status')}</Text><View style={s.statuses}>{statuses.map(status=><Pressable key={status} disabled={!editable||busy} onPress={()=>patch(g.id,{status})} accessibilityRole="radio" accessibilityState={{checked:d.status===status,disabled:!editable}} style={[s.status,d.status===status&&s.selected]}><Text style={{color:d.status===status?colors.actionInk:colors.foreground,fontWeight:'600'}}>{t(status)}</Text></Pressable>)}</View>
@@ -58,7 +61,7 @@ export function OrderScreen({order,onBack,onCapture,onGallery,onOrderChanged}:Pr
    </View>;
   })}
   <View style={s.row}><Button secondary label={t('refresh')} disabled={busy} onPress={()=>void run(refresh)}/><Button secondary label={t('retry')} disabled={busy} onPress={()=>void run(async()=>{await retryEvidence(order.assignee);await refresh()})}/></View>
-  {uploads.map(u=><Text key={u.evidenceId} style={s.muted}>{u.groupId} · {u.uploadState} {u.lastError??''}</Text>)}
+  
   {order.status==='In progress'&&!order.inventory?.admin_test?<Button label={t('submit')} disabled={busy} onPress={()=>void run(async()=>{await flushEvidence(order.assignee);await submitOrder(await getOrder(order.id));{const f=new File(Paths.document,draftKey+".json");if(f.exists)f.delete();}onOrderChanged(await getOrder(order.id));})}/>:null}
  </ScrollView>;
 }
