@@ -3,6 +3,7 @@ import { PNG } from "npm:pngjs@7.0.0";
 import * as exifr from "npm:exifr@7.1.3";
 import { Buffer } from "node:buffer";
 import { IngestError, type Mime } from "./core.ts";
+import {stampFont} from "./stamp-font.ts";
 
 type Pixels = { width: number; height: number; data: Uint8Array };
 // Apply only the original EXIF display orientation; never guess from aspect ratio.
@@ -60,44 +61,68 @@ export async function originalExif(bytes: Uint8Array) {
   } catch { return null; }
 }
 
-// A fixed bitmap font makes the final server stamp identical on Android and iOS.
-const font: Record<string, string> = {
- A:"01110/10001/10001/11111/10001/10001/10001",B:"11110/10001/10001/11110/10001/10001/11110",C:"01111/10000/10000/10000/10000/10000/01111",D:"11110/10001/10001/10001/10001/10001/11110",E:"11111/10000/10000/11110/10000/10000/11111",F:"11111/10000/10000/11110/10000/10000/10000",G:"01111/10000/10000/10111/10001/10001/01111",H:"10001/10001/10001/11111/10001/10001/10001",I:"11111/00100/00100/00100/00100/00100/11111",J:"00111/00010/00010/00010/10010/10010/01100",K:"10001/10010/10100/11000/10100/10010/10001",L:"10000/10000/10000/10000/10000/10000/11111",M:"10001/11011/10101/10101/10001/10001/10001",N:"10001/11001/10101/10011/10001/10001/10001",O:"01110/10001/10001/10001/10001/10001/01110",P:"11110/10001/10001/11110/10000/10000/10000",Q:"01110/10001/10001/10001/10101/10010/01101",R:"11110/10001/10001/11110/10100/10010/10001",S:"01111/10000/10000/01110/00001/00001/11110",T:"11111/00100/00100/00100/00100/00100/00100",U:"10001/10001/10001/10001/10001/10001/01110",V:"10001/10001/10001/10001/10001/01010/00100",W:"10001/10001/10001/10101/10101/10101/01010",X:"10001/10001/01010/00100/01010/10001/10001",Y:"10001/10001/01010/00100/00100/00100/00100",Z:"11111/00001/00010/00100/01000/10000/11111",
- "0":"01110/10001/10011/10101/11001/10001/01110","1":"00100/01100/00100/00100/00100/00100/01110","2":"01110/10001/00001/00010/00100/01000/11111","3":"11110/00001/00001/01110/00001/00001/11110","4":"00010/00110/01010/10010/11111/00010/00010","5":"11111/10000/10000/11110/00001/00001/11110","6":"01110/10000/10000/11110/10001/10001/01110","7":"11111/00001/00010/00100/01000/01000/01000","8":"01110/10001/10001/01110/10001/10001/01110","9":"01110/10001/10001/01111/00001/00001/01110", ":":"00000/00100/00100/00000/00100/00100/00000", ".":"00000/00000/00000/00000/00000/00100/00100", ",":"00000/00000/00000/00000/00100/00100/01000", "-":"00000/00000/00000/11111/00000/00000/00000", "+":"00000/00100/00100/11111/00100/00100/00000", "/":"00001/00010/00010/00100/01000/01000/10000", "@":"01110/10001/10111/10101/10111/10000/01111", "|":"00100/00100/00100/00100/00100/00100/00100", "_":"00000/00000/00000/00000/00000/00000/11111", "?":"01110/10001/00001/00010/00100/00000/00100",
-};
-// White text with a narrow shadow is composited directly over the photo.
-// Preserve the displayed aspect ratio and never append a footer or rotate here.
-export function stampImage(image: Pixels, lines: string[]): Uint8Array {
-  const scale=Math.min(1,1200/image.width,1600/image.height), w=Math.max(1,Math.round(image.width*scale)), h=Math.max(1,Math.round(image.height*scale));
-  const margin=Math.max(4,Math.round(w*.014)), charScale=Math.max(1,Math.round(w/400)), lineH=10*charScale;
-  const columns=Math.max(1,Math.floor((w-2*margin)/(6*charScale)));
-  const wrapped=lines.flatMap(l=>{const value=l.toUpperCase();const rows:string[]=[];for(let i=0;i<value.length;i+=columns)rows.push(value.slice(i,i+columns));return rows;});
-  const pixels=new Uint8Array(w*h*4);
+type StampRow = {text:string;size:number;baseline:number;left:number};
+const textWidth=(text:string,size:number)=>[...text].reduce((sum,c)=>sum+(stampFont.glyphs[c]??stampFont.glyphs['?']).advance*size/stampFont.em,0);
+export function fitStampText(text:string,size:number,width:number){
+  text=text.replace(/[\r\n]+/g,' ').trim();
+  if(textWidth(text,size)<=width)return text;
+  while(text.length&&textWidth(text+'…',size)>width)text=text.slice(0,-1);
+  return text+'…';
+}
+export function stampLayout(width:number,height:number,lines:string[]):StampRow[]{
+  const margin=Math.max(5,Math.round(Math.min(width,height)*.022));
+  const maxWidth=width*.68;
+  // Date/GPS stay prominent. Reference lines are deliberately smaller and never wrap.
+  const base=Math.max(7,Math.min(32,Math.min(width,height)*.035));
+  const sizes=lines.map((line,i)=>line.startsWith('ADMIN')?base*.65:i<(lines[0]?.startsWith('ADMIN')?3:2)?base:base*.72);
+  const total=sizes.reduce((a,size)=>a+size*1.32,0);
+  const shrink=Math.min(1,(height*.30)/Math.max(1,total));
+  let cursor=height-margin-sizes.reduce((a,size)=>a+size*1.32*shrink,0);
+  return lines.slice(0,8).map((line,i)=>{
+    const size=sizes[i]*shrink,text=fitStampText(line,size,maxWidth);
+    cursor+=size*1.32;
+    return {text,size,baseline:cursor-size*.18,left:width-margin-textWidth(text,size)};
+  });
+}
+// Rasterize real font outlines with 3×3 subpixel coverage. The same renderer and
+// bundled typeface run on the server for both platforms; client text is untrusted.
+export function stampImage(image:Pixels,lines:string[]):Uint8Array {
+  const scale=Math.min(1,1200/image.width,1600/image.height),w=Math.max(1,Math.round(image.width*scale)),h=Math.max(1,Math.round(image.height*scale));
+  const pixels=new Uint8Array(w*h*4),mask=new Uint8Array(w*h);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const source=(Math.min(image.height-1,Math.floor(y*image.height/h))*image.width+Math.min(image.width-1,Math.floor(x*image.width/w)))*4;
     const at=(y*w+x)*4;pixels.set(image.data.subarray(source,source+4),at);pixels[at+3]=255;
   }
-  const mask=new Uint8Array(w*h), top=Math.max(0,h-margin-wrapped.length*lineH);
-  wrapped.forEach((line,index)=>[...line].forEach((char,col)=>{
-    if(char===' ')return;
-    const left=w-margin-line.length*6*charScale;
-    (font[char]??font['?']).split('/').forEach((row,gy)=>[...row].forEach((p,gx)=>{
-      if(p!=='1')return;
-      for(let dy=0;dy<charScale;dy++)for(let dx=0;dx<charScale;dx++){
-        const x=left+col*6*charScale+gx*charScale+dx,y=top+index*lineH+gy*charScale+dy;
-        if(x>=0&&x<w&&y>=0&&y<h)mask[y*w+x]=1;
+  for(const row of stampLayout(w,h,lines)){
+    const edges:number[][]=[];let cursor=row.left,minY=h,maxY=0;
+    for(const char of row.text){
+      const glyph=stampFont.glyphs[char]??stampFont.glyphs['?'],factor=row.size/stampFont.em;
+      for(const contour of glyph.contours){
+        for(let i=0;i<contour.length;i++){
+          const a=contour[i],b=contour[(i+1)%contour.length];
+          const x1=cursor+a[0]*factor,y1=row.baseline-a[1]*factor,x2=cursor+b[0]*factor,y2=row.baseline-b[1]*factor;
+          minY=Math.min(minY,y1,y2);maxY=Math.max(maxY,y1,y2);
+          if(y1!==y2)edges.push([x1,y1,x2,y2]);
+        }
       }
-    }));
-  }));
-  // Shadow is limited to glyph edges: the photo background remains visible.
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    if(!mask[y*w+x])continue;
-    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
-      const xx=x+dx,yy=y+dy;
-      if(xx<0||xx>=w||yy<0||yy>=h||mask[yy*w+xx])continue;
-      const at=(yy*w+xx)*4;pixels[at]=Math.round(pixels[at]*.65);pixels[at+1]=Math.round(pixels[at+1]*.65);pixels[at+2]=Math.round(pixels[at+2]*.65);
+      cursor+=glyph.advance*factor;
+    }
+    const first=Math.max(0,Math.floor(minY*3)),last=Math.min(h*3,Math.ceil(maxY*3));
+    for(let sy=first;sy<last;sy++){
+      const y=(sy+.5)/3,crossings:number[]=[];
+      for(const [x1,y1,x2,y2] of edges)if((y1<=y&&y2>y)||(y2<=y&&y1>y))crossings.push(x1+(y-y1)*(x2-x1)/(y2-y1));
+      crossings.sort((a,b)=>a-b);
+      for(let i=0;i+1<crossings.length;i+=2){
+        const from=Math.max(0,Math.ceil(crossings[i]*3-.5)),to=Math.min(w*3,Math.ceil(crossings[i+1]*3-.5));
+        for(let sx=from;sx<to;sx++){const at=Math.floor(sy/3)*w+Math.floor(sx/3);mask[at]=Math.min(9,mask[at]+1);}
+      }
     }
   }
-  for(let i=0;i<mask.length;i++)if(mask[i])pixels[i*4]=pixels[i*4+1]=pixels[i*4+2]=255;
-  return new Uint8Array(jpeg.encode({width:w,height:h,data:pixels},88).data);
+  // A single subtle one-pixel shadow, never an opaque rectangle or thick outline.
+  for(let y=1;y<h;y++)for(let x=1;x<w;x++){
+    const alpha=mask[(y-1)*w+x-1]/9*.55,at=(y*w+x)*4;
+    if(alpha)for(let c=0;c<3;c++)pixels[at+c]=Math.round(pixels[at+c]*(1-alpha));
+  }
+  for(let i=0;i<mask.length;i++)if(mask[i]){const alpha=mask[i]/9;for(let c=0;c<3;c++)pixels[i*4+c]=Math.round(pixels[i*4+c]*(1-alpha)+255*alpha);}
+  return new Uint8Array(jpeg.encode({width:w,height:h,data:pixels},90).data);
 }
