@@ -115,16 +115,16 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
-    if (!locationGranted || !clock) return;
+    if (!locationGranted) return;
     let active = true;
-    getFix(clock.offsetMs)
+    getFix(0)
       .then((fix) => {
         const gate = locationGate(
           fix,
           order.inventory?.admin_test
             ? { latitude: fix.latitude, longitude: fix.longitude }
             : order,
-          Date.now() + clock.offsetMs,
+          Date.now(),
         );
         if (!gate.allowed)
           throw new Error(gate.reason ?? "Location check failed.");
@@ -136,7 +136,7 @@ export function CaptureScreen({
     return () => {
       active = false;
     };
-  }, [locationGranted, clock, order.latitude, order.longitude]);
+  }, [locationGranted, order.latitude, order.longitude]);
 
   if (locationGranted === null)
     return <ActivityIndicator color={colors.action} style={{ flex: 1 }} />;
@@ -413,7 +413,7 @@ export function CaptureScreen({
         </Text>
       </View>
 
-      {!galleryApproval ? (
+      {siteReady && !galleryApproval ? (
         <CameraView
           ref={cameraRef}
           style={styles.camera}
@@ -454,7 +454,9 @@ export function CaptureScreen({
         </Pressable>
         <Pressable
           onPress={captureGroupPhoto}
-          disabled={busy || !siteReady || (!galleryApproval && !cameraReady)}
+          disabled={
+            busy || !siteReady || !clock || (!galleryApproval && !cameraReady)
+          }
           style={[styles.primary, busy && styles.disabled]}
           accessibilityRole="button"
         >
