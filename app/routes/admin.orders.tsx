@@ -1,4 +1,4 @@
-import { canAssignOrder, canManage, type Member } from "@shared/access";
+import { canAssignOrder, canSchedule, type Member } from "@shared/access";
 import { localToIso } from "@shared/pmr";
 import { newOrderSchema } from "@shared/records";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ export default function AdminOrdersRoute() {
 }
 
 function AdminOrders({ member }: { member: Member }) {
-  if (!canManage(member)) {
+  if (!canSchedule(member)) {
     return (
       <Page title="Not authorized">
         <Card>

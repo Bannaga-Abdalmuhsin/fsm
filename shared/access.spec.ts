@@ -94,3 +94,5 @@ describe("scopeOrders", () => {
     expect(scopeOrders(supervisor, all)).toEqual([mine, someoneElses]);
   });
 });
+
+describe('regional office role boundaries',()=>{it('scopes team leaders to exact teams and regions',()=>{const m:Member={...supervisor,role:'team_leader',teams:['Team A']};expect(canViewOrder(m,{...someoneElses,team:'Team A'})).toBe(true);expect(canViewOrder(m,{...someoneElses,team:'Team B'})).toBe(false);expect(canAssignOrder(m,{...someoneElses,team:'Team A'})).toBe(false)});it('allows FSM regional visibility but no review or scheduling',()=>{const m:Member={...supervisor,role:'fsm_team'};expect(canViewOrder(m,someoneElses)).toBe(true);expect(canViewOrder(m,otherRegion)).toBe(false);expect(canReviewEvidence(m,someoneElses)).toBe(false);expect(canAssignOrder(m,someoneElses)).toBe(false)})});

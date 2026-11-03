@@ -59,3 +59,7 @@ Deploy the simple_group_submissions_profiles_export migration and JWT-protected 
 ### Capture recovery (mobile 0.3.1)
 
 Photo groups count both local captures and uploaded evidence, without double counting. Local captures display Photo taken with Recapture and a pending/retry upload action. Completion of the persisted upload queue refreshes the visit immediately. Expo uploads pass File objects to expo/fetch; legacy URI-only multipart objects are unsupported by SDK 58. Captures are resolved from the current documents directory, so an iOS app update that changes its sandbox path does not strand saved photos. Missing originals require recapture; they are never reconstructed or silently accepted. A replacement preserves the missing capture metadata and stops its futile retries.
+
+### Regional office portal
+
+The web portal follows Field team → Regional team leader → Regional manager → FSM team → Uploaded to stc. Team leaders see their assigned field teams within their regions; regional managers and FSM staff see their provisioned regions. Regional approval is kept separate from the recorded stc upload. The FSM desk claims an approved operational WO, exports its report/photos, performs the real upload in stc and records the stc reference. Returns require reasons and appear at the responsible stage. All review and handoff operations use authenticated, server-scoped RPCs. The People & access page is administrator-only and grants access to existing Supabase Auth accounts; it does not offer public registration.

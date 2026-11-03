@@ -16,7 +16,7 @@ beforeAll(async()=>{
  db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));await db.exec('alter table storage.buckets add column file_size_limit bigint, add column allowed_mime_types text[]');
  await db.exec(`create table public.pmr_sites(site_id text primary key,location text,latitude float8,longitude float8,site_status text,site_type text,vendor text,region text,district text,source_id text,source_row int,refreshed_at timestamptz,validation_errors jsonb);
  create table public.pmr_schedule_rows(source_id text,sync_id uuid,source_tab text,source_row int,site_id text,region text,district text,scheduled_date date,tcn_number text,tcn_time text,team_name text,supervisor_name text,raw jsonb,state text default 'draft',validation_errors jsonb default '[]',order_id text,synced_at timestamptz default now(),site_reference jsonb,primary key(source_id,sync_id));`);
- for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql'])await db.exec(sql(file).replace("user_id uuid primary key references auth.users(id)","user_id text primary key references auth.users(id)"));
+ for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql','./migrations/20261103083112_office_workflow_fsm_handoff.sql'])await db.exec(sql(file).replace("user_id uuid primary key references auth.users(id)","user_id text primary key references auth.users(id)"));
  await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('a','admin@test','org','admin','["CR"]','[]'),('t','tech@test','org','technician','["CR"]','[]'),('l','lead@test','org','team_leader','["CR"]','["Team"]'),('r','rm@test','org','regional_manager','["CR"]','[]');`);
  await db.query(`insert into public.pmr_orders(id,owner_email,org_id,site_id,site_type,region,team,assignee,wo,tcn,month,latitude,longitude,scheduled_start,scheduled_end,tcn_start,tcn_end,inventory,checklist,policy,created_at,updated_at) values('wo','admin@test','org','SITE','ODU','CR','Team','tech@test','WO1','TCN1','2026-11',24.7,46.7,$1,$2,$1,$2,'{}',$3,$4,$1,$1)`,[start,end,JSON.stringify(checklists.ODU),JSON.stringify(defaultPolicy)]);
 },60000);
@@ -133,6 +133,30 @@ await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.string
   await admin();await db.exec("insert into public.pmr_evidence select (jsonb_populate_record(null::public.pmr_evidence,to_jsonb(e)||'{\"id\":\"pending-photo\",\"capture_id\":\"pending-photo\",\"order_id\":\"simple-wo\",\"state\":\"Pending analysis\",\"analysis\":null,\"quality\":{\"score\":null,\"provisional\":true}}'::jsonb)).* from public.pmr_evidence e where id='photo'");
   await as('tech@test');await db.exec("select public.pmr_submit_order('simple-wo',3)");
   await as('lead@test');await expect(db.exec("select public.pmr_review_photo('pending-photo',3,'approved','')")).rejects.toThrow();
+ });
+ it('enforces FSM region scope, regional approval and ownership before recording a real stc reference',async()=>{
+  await admin();await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('fsm','fsm@test','org','fsm_team','["CR"]','[]'),('fsm2','fsm2@test','org','fsm_team','["ER"]','[]');`);
+  await as('fsm@test');await expect(db.exec("select public.pmr_fsm_action('wo',5,'claim','','')")).rejects.toThrow(/Regional approval/);
+  await expect(db.exec("select public.pmr_export_snapshot('wo')")).rejects.toThrow(/region-approved/);
+  await expect(db.exec("select public.pmr_review_order('wo',5,'approved','')")).rejects.toThrow(/Reviewer role/);
+  await admin();await db.exec("select set_config('pmr.workflow','on',false);update public.pmr_orders set status='Approved',version=10 where id='wo'");
+  await as('fsm2@test');expect((await db.query("select id from public.pmr_orders where id='wo'")).rows).toHaveLength(0);await expect(db.exec("select public.pmr_fsm_action('wo',10,'claim','','')")).rejects.toThrow(/FSM access/);
+  await as('fsm@test');await db.exec("select public.pmr_fsm_action('wo',10,'claim','','')");
+  await expect(db.exec("select public.pmr_fsm_action('wo',11,'uploaded','','')")).rejects.toThrow(/reference/);
+  await expect(db.exec("select public.pmr_fsm_action('wo',10,'uploaded','STC-1','')")).rejects.toThrow(/refresh/);
+  await db.exec("select public.pmr_fsm_action('wo',11,'return','','Check the export')");
+  expect((await db.query<{status:string}>("select status from public.pmr_orders where id='wo'")).rows[0].status).toBe('Leader approved');
+  await admin();await db.exec("update public.pmr_orders set status='Approved',version=14 where id='wo'");
+  await as('fsm@test');await db.exec("select public.pmr_fsm_action('wo',14,'claim','','')");await db.exec("select public.pmr_fsm_action('wo',15,'uploaded','STC-1','Manually uploaded')");
+  expect((await db.query<{state:string;stc_reference:string}>("select state,stc_reference from public.pmr_fsm_handoffs where order_id='wo'")).rows[0]).toEqual({state:'Uploaded',stc_reference:'STC-1'});
+  await as('rm@test');await expect(db.exec("select public.pmr_review_order('wo',16,'returned','change')")).rejects.toThrow(/already recorded/);
+ });
+ it('rejects group approval with pending photos atomically and includes team scopes in membership',async()=>{
+  await as('lead@test');const m=(await db.query<{m:{member:{teams:string[]}}}>("select public.pmr_membership() m")).rows[0].m;expect(m.member.teams).toEqual(['Team']);
+  const photos=(await db.query<{id:string;revision:number}>("select id,revision from public.pmr_evidence where order_id='simple-wo'")).rows;
+  const results=(await db.query<{id:string;updated_at:string}>("select id,updated_at from public.pmr_results where order_id='simple-wo'")).rows;
+  await expect(db.query("select public.pmr_review_group('simple-wo','O01',4,'approved','',$1,$2)",[JSON.stringify(photos),JSON.stringify(results)])).rejects.toThrow(/incomplete|retake/);
+  expect((await db.query("select * from public.pmr_review_events where order_id='simple-wo' and decision='approved'")).rows).toHaveLength(0);
  });
  it('versions quality policies and refuses location weakening',async()=>{
   await as('admin@test');await expect(db.query('select public.pmr_save_quality_policy($1)',[JSON.stringify({...defaultPolicy,radius:500})])).rejects.toThrow(/cannot be relaxed/);

@@ -48,6 +48,8 @@ const orderRow = {
 };
 
 describe("toOrder", () => {
+  it("loads inventory metadata flags and strings alongside counts",()=>{expect(toOrder({...orderRow,inventory:{generators:2,admin_test:true,source_order_id:"source",declared_by:"tech@example.com"}}).inventory.admin_test).toBe(true)});
+
   it("maps snake_case columns to the app shape", () => {
     const order = toOrder(orderRow);
     expect(order.siteId).toBe("CR-001");
@@ -74,6 +76,7 @@ describe("toMember", () => {
       orgId: "org-1",
       role: "technician",
       regions: ["CR"],
+      teams: [],
     });
     expect(() =>
       toMember({

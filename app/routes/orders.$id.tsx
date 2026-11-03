@@ -1,265 +1,49 @@
-import { canOperateOrder, type Member } from "@shared/access";
-import type { EvidenceGroup } from "@shared/checklists";
-import { formatTime } from "@shared/pmr";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ChangeEvent } from "react";
-import { Link, useParams } from "react-router";
-
-import { EvidenceImage } from "@/components/pmr/evidence-image";
-import { Card, Notice, Page, RequireMember } from "@/components/pmr/pmr-shell";
-import { Button } from "@/components/ui/button";
-import { currentFix } from "@/lib/geolocation";
-import {
-  exportOrderPackage,
-  captureEvidence,
-  checkInOrder,
-  fetchEvidence,
-  fetchOrder,
-  setOrderStatus,
-} from "@/lib/pmr-api";
-
-export default function OrderRoute() {
-  return <RequireMember render={(member) => <OrderDetail member={member} />} />;
+import {canReviewEvidence,type Member} from '@shared/access';
+import {officeStage,stageLabels,stageLabel,reviewStage} from '@shared/office-workflow';
+import {formatTime} from '@shared/pmr';
+import {useQuery,useQueryClient,useMutation} from '@tanstack/react-query';
+import {useState} from 'react';
+import {Link,useParams} from 'react-router';
+import {Page,Notice,RequireMember} from '@/components/pmr/pmr-shell';
+import {Button} from '@/components/ui/button';
+import {fetchOrder,exportOrderPackage} from '@/lib/pmr-api';
+import {officeRecords,photoUrl,decidePhoto,decideResult,decideGroup,decideOrder,fsmAction,type Photo} from '@/lib/office-api';
+export default function OrderRoute(){return <RequireMember render={m=><OfficeOrder member={m}/>}/>}
+function OfficeOrder({member:m}:{member:Member}){
+ const {id=''}=useParams(),client=useQueryClient();const [note,setNote]=useState(''),[reference,setReference]=useState(''),[notice,setNotice]=useState('');
+ const q=useQuery({queryKey:['office-order',id,m.ownerEmail],queryFn:async()=>{const [order,records]=await Promise.all([fetchOrder(id,m),officeRecords(id)]);return {order,records}}});
+ const run=useMutation({mutationFn:(fn:()=>Promise<unknown>)=>fn(),onSuccess:async()=>{setNotice('Saved.');await Promise.all([client.invalidateQueries({queryKey:['office-order',id]}),client.invalidateQueries({queryKey:['office-orders']})])},onError:e=>setNotice(e.message)});
+ const act=(fn:()=>Promise<unknown>)=>{setNotice('');run.mutate(fn)};
+ if(q.isLoading)return <Page title="Work order"><p>Loading submission…</p></Page>;
+ if(q.error||!q.data)return <Page title="Work order"><Notice>Unable to open this work order. {(q.error as Error)?.message}</Notice><Button onClick={()=>void q.refetch()}>Retry</Button></Page>;
+ const {order:o,records:r}=q.data,stage=officeStage(o.status,r.handoff),level=reviewStage(m.role),test=o.inventory.admin_test===true;
+ const mayReview=canReviewEvidence(m,o)&&!!level&&((level==='team_leader'&&o.status==='Submitted')||(level==='regional_manager'&&o.status==='Leader approved'));
+ const mayFsm=['fsm_team','admin'].includes(m.role)&&o.status==='Approved'&&!test&&o.assignee.toLowerCase()!==m.ownerEmail.toLowerCase();
+ const pending=r.photos.filter(p=>p.state==='Pending analysis').length;
+ const isApproved=(kind:string,target:string,fingerprint:string)=>r.reviews.some(v=>v.kind===kind&&v.target_id===target&&v.stage===level&&v.fingerprint===fingerprint&&v.decision==='approved');
+ const exportAllowed=m.role!=='technician'&&(m.role!=='fsm_team'||o.status==='Approved'&&!test);
+ return <Page title={`WO ${o.wo}`}>
+  <Link className="office-link" to="/">← Regional work orders</Link>
+  <div className="office-heading"><p>{o.siteId} · {o.siteType} · {o.region} · {o.team}</p><span className={`office-badge stage-${stage}`}>{stageLabel(o.status,r.handoff)}</span></div>
+  {test?<Notice>ADMIN TEST — this submission cannot proceed to operational approval or FSM handoff.</Notice>:null}
+  <ol className="office-flow">{stageLabels.map((s,i)=><li key={s} className={i<stage?'complete':i===stage?'current':''}><b>{i<stage?'✓':i+1}</b><span>{s}</span></li>)}</ol>
+  <section className="office-card"><div className="office-metadata"><div><small>Field technician</small><strong>{o.assignee}</strong></div><div><small>TCN</small><strong>{o.tcn}</strong></div><div><small>Authorized window · Riyadh</small><strong>{formatTime(o.tcnStart)} – {formatTime(o.tcnEnd)}</strong></div><div><small>Site coordinates</small><strong>{o.latitude}, {o.longitude}</strong></div></div>{o.reviewNote?<p className="office-return">Latest review / return note: {o.reviewNote}</p>:null}<div className="office-actions"><Button variant="outline" disabled={run.isPending||q.isFetching} onClick={()=>void q.refetch()}>Refresh submission</Button>{exportAllowed?<Button disabled={run.isPending} onClick={()=>act(()=>exportOrderPackage(o.id,o.wo))}>Export report & photos</Button>:null}</div></section>
+  {notice?<Notice>{notice}</Notice>:null}
+  {o.status==='Assigned'||['Checked in','In progress'].includes(o.status)?<p className="office-muted">The field team is preparing this PMR. Review actions become available after field submission. Evidence is captured in the mobile app.</p>:null}
+  {pending?<Notice>{pending} photo(s) await analysis. They cannot be approved until QC is complete.</Notice>:null}
+  {mayReview?<section className="office-card"><h2>{level==='team_leader'?'Team leader review':'Regional manager review'}</h2><label className="office-field">Review note / return reason<textarea maxLength={2000} value={note} onChange={e=>setNote(e.target.value)} placeholder="A reason is required when returning evidence or resolving review findings."/></label><p className="office-muted">Review each group below, then approve the work order. Group approval records a decision for every included photo and ETL.</p><div className="office-actions"><Button disabled={run.isPending||!!pending||test} onClick={()=>act(()=>decideOrder(o.id,o.version,'approved',note))}>{level==='team_leader'?'Send to regional manager':'Approve & send to FSM'}</Button><Button variant="outline" disabled={run.isPending||!note.trim()} onClick={()=>act(()=>decideOrder(o.id,o.version,'returned',note))}>Return to field team</Button></div></section>:null}
+  {mayFsm?<section className="office-card office-fsm"><h2>FSM submission desk</h2><p>Upload the approved package in the stc system, then record the stc reference here.</p>{r.handoff?.state==='Uploaded'?<div className="office-return"><strong>Uploaded to stc · {r.handoff.stc_reference}</strong><p>{r.handoff.assigned_to} · {formatTime(r.handoff.uploaded_at??'')}</p>{r.handoff.note}</div>:<><p className="office-muted">{r.handoff?.state==='In progress'?`Claimed by ${r.handoff.assigned_to}`:'Ready to claim'}</p>{r.handoff?.assigned_to===m.ownerEmail&&r.handoff.state==='In progress'?<><label className="office-field">stc upload / closure reference<input value={reference} onChange={e=>setReference(e.target.value)} maxLength={200}/></label><label className="office-field">Notes / return reason<textarea value={note} onChange={e=>setNote(e.target.value)} maxLength={2000}/></label><div className="office-actions"><Button disabled={run.isPending||!reference.trim()} onClick={()=>act(()=>fsmAction(o.id,o.version,'uploaded',reference,note))}>Record uploaded to stc</Button><Button variant="outline" disabled={run.isPending||!note.trim()} onClick={()=>act(()=>fsmAction(o.id,o.version,'return','',note))}>Return to regional manager</Button></div></>:<Button disabled={run.isPending||r.handoff?.state==='In progress'} onClick={()=>act(()=>fsmAction(o.id,o.version,'claim','',''))}>Claim for stc upload</Button>}</>}</section>:null}
+  {r.handoff?.state==='Returned'?<Notice>FSM returned this submission to the regional manager: {r.handoff.note}</Notice>:null}
+  <h2 className="office-section-title">Photo groups & ETL results</h2>
+  {o.checklist.map(g=>{const assessment=r.groups.find(s=>s.group_id===g.id),photos=r.photos.filter(p=>p.group_id===g.id),results=r.results.filter(v=>v.instance===g.id);const approved=!!level&&results.length===g.etls.length&&results.every(v=>isApproved('etl',v.id,v.updated_at))&&photos.every(p=>isApproved('photo',p.id,p.sha));const blocked=photos.some(p=>!['Accepted','Supervisor review'].includes(p.state)||p.analysis?.status!=='complete'||p.quality?.provisional!==false||p.findings.some(f=>f.severity==='block'));return <details className="office-card office-group" key={g.id}><summary><span><b>{g.id} · {g.title}</b><small>{photos.length} photos · {results.length}/{g.etls.length} ETLs recorded</small></span><span className="office-badge">{assessment?.status??(results.length?'Individual results':'Not submitted')}{approved?' · Reviewed':''}</span></summary>
+   {assessment?.remarks?<p>{assessment.remarks}</p>:null}
+   {assessment&&Object.keys(assessment.measurements).length?<div className="office-readings">{Object.entries(assessment.measurements).map(([k,v])=><span key={k}>{({temperature_c:'Temperature °C',dc_busbar_v:'DC busbar V',bbu_v:'BBU V',ac_v:'AC V'} as Record<string,string>)[k]??k}: <strong>{v}</strong></span>)}</div>:null}
+   <div className="office-photos">{photos.map(p=><PhotoCard key={p.id} photo={p} reviewed={!!level&&isApproved('photo',p.id,p.sha)} mayReview={mayReview} busy={run.isPending} onReview={decision=>act(()=>decidePhoto(p,decision,note))} note={note}/>)}</div>
+   {!photos.length?<p className="office-muted">No uploaded photos in this group.</p>:null}
+   {mayReview?<div className="office-actions"><Button disabled={run.isPending||blocked||results.length!==g.etls.length||approved} onClick={()=>act(()=>decideGroup(o.id,g.id,o.version,'approved',note,r))}>Approve this group</Button><Button variant="outline" disabled={run.isPending||!note.trim()||results.length!==g.etls.length} onClick={()=>act(()=>decideGroup(o.id,g.id,o.version,'returned',note,r))}>Return this group</Button></div>:null}
+   <div className="office-table-scroll"><table className="office-table compact"><thead><tr><th>ETL</th><th>Field result</th><th>Remarks / readings</th><th>My review</th></tr></thead><tbody>{g.etls.map(etl=>{const result=results.find(v=>v.etl_code===etl.code);return <tr key={etl.code}><td>{etl.description}<small>{etl.code}</small></td><td><span className="office-badge">{result?.status??'Not submitted'}</span></td><td>{result?.remarks||'—'}<small>{result?.readings}</small></td><td>{result&&mayReview?<div className="office-actions"><Button size="sm" variant="outline" disabled={run.isPending||isApproved('etl',result.id,result.updated_at)} onClick={()=>act(()=>decideResult(result,'approved',note))}>{isApproved('etl',result.id,result.updated_at)?'Reviewed':'Approve'}</Button><Button size="sm" variant="outline" disabled={run.isPending||!note.trim()} onClick={()=>act(()=>decideResult(result,'returned',note))}>Return</Button></div>:result&&level&&isApproved('etl',result.id,result.updated_at)?'Approved':'—'}</td></tr>})}</tbody></table></div>
+  </details>})}
+  <section className="office-card"><h2>Approval history</h2>{!r.reviews.length?<p className="office-muted">No review decisions recorded.</p>:<div className="office-table-scroll"><table className="office-table compact"><thead><tr><th>Stage</th><th>Decision / target</th><th>Reviewer</th><th>Riyadh time / note</th></tr></thead><tbody>{[...r.reviews].sort((a,b)=>b.reviewed_at.localeCompare(a.reviewed_at)).map(v=><tr key={`${v.kind}-${v.target_id}-${v.stage}`}><td>{v.stage.split('_').join(' ')}</td><td>{v.decision} · {v.kind}<small>{v.target_id}</small></td><td>{v.reviewer}</td><td>{formatTime(v.reviewed_at)}<small>{v.note}</small></td></tr>)}</tbody></table></div>}</section>
+ </Page>
 }
-
-function OrderDetail({ member }: { member: Member }) {
-  const { id = "" } = useParams();
-  const queryClient = useQueryClient();
-  const [message, setMessage] = useState<string | null>(null);
-
-  const orderQuery = useQuery({
-    queryKey: ["order", id, member.ownerEmail],
-    queryFn: () => fetchOrder(id, member),
-  });
-  const evidenceQuery = useQuery({
-    queryKey: ["evidence", id],
-    queryFn: () => fetchEvidence([id]),
-  });
-
-  const run = useMutation({
-    mutationFn: (action: () => Promise<unknown>) => action(),
-    onSuccess: () => {
-      setMessage(null);
-      void queryClient.invalidateQueries({ queryKey: ["order", id] });
-      void queryClient.invalidateQueries({ queryKey: ["evidence", id] });
-      void queryClient.invalidateQueries({ queryKey: ["orders"] });
-    },
-    onError: (err) => setMessage((err as Error).message),
-  });
-
-  if (orderQuery.error)
-    return (
-      <Page title="Work order">
-        <Notice>{(orderQuery.error as Error).message}</Notice>
-      </Page>
-    );
-  if (!orderQuery.data)
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        Loading work order…
-      </div>
-    );
-
-  const order = orderQuery.data;
-  const evidence = evidenceQuery.data ?? [];
-  const mine = canOperateOrder(member, order);
-  const checkedIn = order.checkIn !== null;
-  const canCapture =
-    mine &&
-    checkedIn &&
-    (order.status === "Checked in" || order.status === "In progress");
-
-  function countFor(etlNumber: number) {
-    return evidence.filter((e) => e.linkedEtls.includes(etlNumber)).length;
-  }
-
-  function onPhoto(
-    group: EvidenceGroup,
-    etlNumber: number,
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const instance = String(countFor(etlNumber) + 1);
-    run.mutate(async () => {
-      const fix = await currentFix();
-      await captureEvidence({
-        order,
-        member,
-        groupId: group.id,
-        etlNumber,
-        file,
-        fix,
-        instance,
-      });
-    });
-  }
-
-  return (
-    <Page title={`WO ${order.wo}`}>
-      <Link to="/" className="text-sm underline">
-        Back to work orders
-      </Link>
-      {member.role !== "technician" ? <Button disabled={run.isPending} onClick={() => run.mutate(() => exportOrderPackage(order.id,order.wo))}>Export WO report & photos</Button> : null}
-      <Card>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Site</dt>
-          <dd>
-            {order.siteId} · {order.siteType}
-          </dd>
-          <dt className="text-muted-foreground">Region / team</dt>
-          <dd>
-            {order.region} · {order.team}
-          </dd>
-          <dt className="text-muted-foreground">Assignee</dt>
-          <dd className="break-all">{order.assignee}</dd>
-          <dt className="text-muted-foreground">TCN</dt>
-          <dd>{order.tcn}</dd>
-          <dt className="text-muted-foreground">TCN window</dt>
-          <dd>
-            {formatTime(order.tcnStart)} – {formatTime(order.tcnEnd)}
-          </dd>
-          <dt className="text-muted-foreground">Status</dt>
-          <dd>{order.status}</dd>
-          <dt className="text-muted-foreground">Checked in</dt>
-          <dd>
-            {order.checkedInAt ? formatTime(order.checkedInAt) : "Not yet"}
-          </dd>
-        </dl>
-        {order.reviewNote && (
-          <p className="mt-3 text-sm">Review note: {order.reviewNote}</p>
-        )}
-      </Card>
-
-      {mine && (
-        <Card>
-          <div className="flex flex-wrap gap-2">
-            {!checkedIn && order.status === "Assigned" && (
-              <Button
-                disabled={run.isPending}
-                onClick={() =>
-                  run.mutate(async () =>
-                    checkInOrder(order, await currentFix(), member),
-                  )
-                }
-              >
-                Check in at site
-              </Button>
-            )}
-            {checkedIn && order.status === "Checked in" && (
-              <Button
-                disabled={run.isPending}
-                onClick={() =>
-                  run.mutate(() => setOrderStatus(order, "In progress", member))
-                }
-              >
-                Start work
-              </Button>
-            )}
-            {order.status === "In progress" && (
-              <Button
-                variant="outline"
-                disabled={run.isPending}
-                onClick={() =>
-                  run.mutate(() => setOrderStatus(order, "Submitted", member))
-                }
-              >
-                Submit for review
-              </Button>
-            )}
-          </div>
-          {!mine && (
-            <p className="text-sm text-muted-foreground">
-              Read-only: this work order is not assigned to you.
-            </p>
-          )}
-        </Card>
-      )}
-
-      {message && <Notice>{message}</Notice>}
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">ETL checklist</h2>
-        {order.checklist.map((group) => (
-          <Card key={group.id}>
-            <h3 className="mb-2 font-medium">{group.title}</h3>
-            <ul className="divide-y">
-              {group.etls.map((etl) => {
-                const count = countFor(etl.number);
-                return (
-                  <li
-                    key={etl.number}
-                    className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0 text-sm">
-                      <p className="font-medium">
-                        {etl.number}. {etl.code}
-                        {etl.requiresClarification && (
-                          <span className="ml-2 rounded-full border px-2 py-0.5 text-xs">
-                            Needs clarification
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-muted-foreground">{etl.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {count} photo{count === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    {canCapture && (
-                      <label className="inline-flex shrink-0 cursor-pointer items-center rounded-md border px-3 py-2 text-sm">
-                        Capture photo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="sr-only"
-                          disabled={run.isPending}
-                          onChange={(event) =>
-                            onPhoto(group, etl.number, event)
-                          }
-                        />
-                      </label>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        ))}
-      </section>
-
-      <section className="space-y-3 pb-8">
-        <h2 className="text-lg font-semibold">Evidence</h2>
-        {evidence.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No evidence captured yet.
-          </p>
-        )}
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {evidence.map((item) => (
-            <li key={item.id}>
-              <Card>
-                <div className="flex gap-3">
-                  <EvidenceImage evidence={item} />
-                  <div className="min-w-0 text-sm">
-                    <p className="font-medium">{item.state}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Captured {formatTime(item.capturedAt)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      ETL {item.linkedEtls.join(", ")}
-                    </p>
-                    {item.reviewNote && (
-                      <p className="text-xs">Note: {item.reviewNote}</p>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </Page>
-  );
-}
+function PhotoCard({photo:p,reviewed,mayReview,busy,onReview,note}:{photo:Photo;reviewed:boolean;mayReview:boolean;busy:boolean;onReview:(d:string)=>void;note:string}){const q=useQuery({queryKey:['office-photo-url',p.id,p.revision],queryFn:()=>photoUrl(p),staleTime:180000});const ready=['Accepted','Supervisor review'].includes(p.state)&&p.analysis?.status==='complete'&&p.quality?.provisional===false&&!p.findings.some(f=>f.severity==='block');return <article className="office-photo">{q.data?<a href={q.data} target="_blank" rel="noreferrer"><img src={q.data} alt={`${p.group_id} stamped PMR evidence`}/></a>:<div className="office-photo-placeholder">{q.error?'Preview unavailable':'Loading photo…'}</div>}<div><span className="office-badge">{p.state}{reviewed?' · Reviewed':''}</span><p>Quality: {p.quality?.score==null?'Pending analysis':`${p.quality.score}%`}</p><small>{formatTime(p.captured_at)}<br/>GPS {p.gps.latitude}, {p.gps.longitude} · ±{p.gps.accuracy} m</small>{p.findings.map((f,i)=><p key={i} className="office-return">{f.message}</p>)}{mayReview?<div className="office-actions"><Button size="sm" disabled={busy||!ready||reviewed} onClick={()=>onReview('approved')}>Approve photo</Button><Button size="sm" variant="outline" disabled={busy||!note.trim()} onClick={()=>onReview('returned')}>Request retake</Button></div>:null}</div></article>}

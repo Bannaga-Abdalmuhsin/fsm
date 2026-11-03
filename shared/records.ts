@@ -23,6 +23,7 @@ export const memberRowSchema = z.object({
   org_id: z.string().nullable(),
   role: z.enum(roles),
   regions: z.array(z.string()),
+  teams: z.array(z.string()).default([]),
 });
 
 export const orderRowSchema = z.object({
@@ -46,7 +47,7 @@ export const orderRowSchema = z.object({
   status: z.string(),
   checked_in_at: z.string().nullable(),
   check_in: geoSchema.nullable(),
-  inventory: z.record(z.string(), z.number()),
+  inventory: z.record(z.string(), z.unknown()),
   checklist: z.array(groupSchema),
   policy: z.custom<Policy>(
     (value) => typeof value === "object" && value !== null,
@@ -84,6 +85,7 @@ export function toMember(row: unknown): Member {
     orgId: parsed.org_id,
     role: parsed.role,
     regions: parsed.regions,
+    teams: parsed.teams,
   };
 }
 
@@ -108,7 +110,7 @@ export type Order = {
   status: string;
   checkedInAt: string | null;
   checkIn: Geo | null;
-  inventory: Record<string, number>;
+  inventory: Record<string, unknown>;
   checklist: EvidenceGroup[];
   policy: Policy;
   version: number;

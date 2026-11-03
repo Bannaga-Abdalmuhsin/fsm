@@ -1,4 +1,4 @@
-import { canManage, type Member } from "@shared/access";
+import { canSchedule, roleLabel, type Member } from "@shared/access";
 import { useState, type ReactNode } from "react";
 import { Link, Navigate, useLocation } from "react-router";
 
@@ -39,7 +39,7 @@ export function Page({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:p-6">
+    <div className="office-page mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-6">
       <h1 className="text-xl font-semibold">{title}</h1>
       {children}
     </div>
@@ -75,18 +75,18 @@ export function Shell({
   const { signOut } = useAuth();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b bg-background px-4 py-3">
-        <Link to="/" className="font-semibold">
-          FSM PMR Evidence
+    <div className="office-shell flex min-h-full flex-col">
+      <header className="office-header">
+        <Link to="/" className="office-brand">
+          <img src="/brand/bm-logo.webp" alt="BM"/> <span>FSM PMR <small>Regional operations portal</small></span>
         </Link>
         <nav className="flex flex-1 flex-wrap gap-3 text-sm">
           <Link to="/">Work orders</Link>
-          {canManage(member) && <Link to="/admin/orders">Admin</Link>}
-          {canManage(member) && <Link to="/review">Review</Link>}
+          {canSchedule(member) && <Link to="/admin/orders">Scheduling</Link>}
+          {member.role === "admin" && <Link to="/admin/access">People & access</Link>}
         </nav>
         <span className="text-xs text-muted-foreground">
-          {member.ownerEmail} · {member.role}
+          {member.ownerEmail} · {roleLabel(member.role)} · {member.regions.join(" / ")}
         </span>
         <Button
           variant="outline"

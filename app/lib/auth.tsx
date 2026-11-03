@@ -32,14 +32,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 async function loadState(session: Session | null): Promise<AuthState> {
   const email = session?.user.email;
   if (!session || !email) return { phase: "signed-out" };
-  const { data, error } = await getSupabase()
-    .from("pmr_members")
-    .select("owner_email, org_id, role, regions")
-    .eq("owner_email", email)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return { phase: "unprovisioned", email };
-  return { phase: "ready", email, member: toMember(data) };
+  const {data,error}=await getSupabase().rpc("pmr_membership");
+  if(error)throw error;
+  if(data?.state!=="ready")return {phase:"unprovisioned",email};
+  return {phase:"ready",email,member:toMember(data.member)};
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
