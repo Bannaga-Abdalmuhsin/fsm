@@ -79,3 +79,7 @@ The camera preview initializes after the GPS/geofence check, independently of th
 ### Explicit photo submission (0.3.4)
 
 New captures remain local drafts until Submit group & photos saves the group result and releases that group to the upload queue. Background retries never release unsubmitted drafts. Uploaded requires the ingest registration receipt and a matching readable Supabase evidence row; a local status alone is insufficient. Retain originals when an upload fails. The office photo explorer refreshes every 15 seconds and offers an administrator-only Admin test WOs source, clearly labelled and excluded from operational dashboards and stc workflows.
+
+### Transparent evidence stamp (0.3.5)
+
+New server derivatives retain the displayed photo aspect ratio and use a bottom-right white text overlay with a narrow shadow, without a solid footer. EXIF orientation is normalized once; no aspect-ratio-based rotation is applied. Native iOS capture follows device orientation even when the app UI is portrait locked. Stamps retain actual capture time, GPS with rounded accuracy, WO/site/TCN, ETLs and technician/team identity. Existing registered files remain immutable. Google reverse geocoding is not configured; phone GPS and CMDB remain authoritative, and any future address lookup must not block capture.
