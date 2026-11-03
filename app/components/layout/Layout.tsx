@@ -1,3 +1,6 @@
+import { useLocation } from "react-router";
+import { useAuth } from "@/lib/auth";
+import { Shell } from "@/components/pmr/pmr-shell";
 import { HeaderActionsProvider } from "@agent-native/toolkit/app-shell";
 
 interface LayoutProps {
@@ -16,11 +19,21 @@ interface LayoutProps {
  * "@/lib/tab-id"). See the `agent-native-toolkit` skill for the full pattern.
  */
 export function Layout({ children }: LayoutProps) {
+  const { state } = useAuth();
+  const path = useLocation().pathname;
+  const content =
+    state.phase === "ready" &&
+    !path.startsWith("/auth/") &&
+    path !== "/reset-password" ? (
+      <Shell member={state.member}>{children}</Shell>
+    ) : (
+      children
+    );
   return (
     <HeaderActionsProvider>
       <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
         <main className="agent-native-app-main min-w-0 flex-1 overflow-y-auto overscroll-contain">
-          {children}
+          {content}
         </main>
       </div>
     </HeaderActionsProvider>
