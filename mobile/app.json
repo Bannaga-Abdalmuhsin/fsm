@@ -11,7 +11,7 @@
     "ios": {
       "bundleIdentifier": "com.businessmagnificence.fsm",
       "supportsTablet": false,
-      "buildNumber": "7"
+      "buildNumber": "8"
     },
     "android": {
       "package": "com.businessmagnificence.fsm",
@@ -24,7 +24,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "versionCode": 7
+      "versionCode": 8
     },
     "plugins": [
       "expo-secure-store",
