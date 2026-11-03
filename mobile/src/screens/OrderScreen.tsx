@@ -26,6 +26,7 @@ import {
   flushEvidence,
   queuedEvidence,
   retryEvidence,
+  submitGroupEvidence,
   subscribeEvidence,
   type LocalEvidence,
 } from "../uploadQueue";
@@ -178,6 +179,7 @@ export function OrderScreen({
     );
     await refresh();
     setMessage(t("saved"));
+    void submitGroupEvidence(order.assignee, order.id, g.id).then(refresh).catch(e => setMessage(e.message));
   }
   // Refresh on persisted queue transitions, including completion of background uploads.
   useEffect(
@@ -310,7 +312,7 @@ export function OrderScreen({
                 </Text>
                 <Text style={s.muted}>
                   {photo.taken
-                    ? `${t("photoTaken")} · ${photo.count}`
+                    ? `${t("photoTaken")} · ${photo.count} · ${photo.uploaded ? t("photoUploaded") : photo.uploading ? t("uploading") : photo.failed ? t("uploadFailed") : t("submitPhoto")}`
                     : t("noPhoto")}
                 </Text>
                 <Text style={s.muted}>
@@ -343,7 +345,7 @@ export function OrderScreen({
                             ? t("uploadFailed")
                             : t("uploadPending")}
                     </Text>
-                    {photo.pending.length && !photo.requiresRetake ? (
+                    {photo.failed && !photo.requiresRetake ? (
                       <Button
                         label={
                           photo.uploading
@@ -354,9 +356,7 @@ export function OrderScreen({
                         }
                         disabled={busy || photo.uploading}
                         onPress={() =>
-                          void retryEvidence(order.assignee, g.id, order.id)
-                            .then(refresh)
-                            .catch((e) => setMessage(e.message))
+                          void run(() => save(g))
                         }
                       />
                     ) : null}
@@ -490,7 +490,7 @@ export function OrderScreen({
                   </View>
                 ) : null}
                 <Button
-                  label={t("save")}
+                  label={t("submitGroup")}
                   disabled={busy || !editable || !d.status}
                   onPress={() => void run(() => save(g))}
                 />
