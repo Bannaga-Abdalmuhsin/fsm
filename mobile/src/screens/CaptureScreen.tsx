@@ -17,7 +17,7 @@ import {
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
-import { replaceMissingCaptures, flushEvidence } from "../uploadQueue";
+import { replaceMissingCaptures } from "../uploadQueue";
 import { captureRef } from "react-native-view-shot";
 
 import { captureTimeGate, locationGate } from "../../../shared/pmr";
@@ -378,7 +378,7 @@ export function CaptureScreen({
           sha256: derivativeSha256,
           stampLines: lines,
         },
-        uploadState: "queued",
+        uploadState: "draft",
         derivativeNote:
           "App-generated stamp. It does not prove the original is unmodified.",
       };
@@ -388,7 +388,7 @@ export function CaptureScreen({
       await replaceMissingCaptures(email, order.id, group.id, id);
       setStamp(null);
       setSaved(t("photoQueued"));
-      void flushEvidence(email);
+
     } catch (err) {
       setStamp(null);
       setError((err as Error).message);
