@@ -287,7 +287,8 @@ export function CaptureScreen({
         const shutterAt = serverNowMs();
         const captured = await cameraRef.current!.takePictureAsync({
           quality: 0.88,
-          exif: false,
+          exif: true,
+          skipProcessing: false,
         });
         if (!captured) throw new Error("Camera returned no photo.");
         photo = captured;
@@ -308,13 +309,14 @@ export function CaptureScreen({
 
       const lines = [
         ...(order.inventory?.admin_test
-          ? ["ADMIN REMOTE TEST - NOT OPERATIONAL EVIDENCE"]
+          ? ["ADMIN TEST - NOT OPERATIONAL"]
           : []),
         `${stampTime(capturedAtMs)}`,
         `GPS ${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)} ±${Math.round(fix.accuracy)} m`,
-        `Site ${order.site_id} | WO ${order.wo ?? "pending"} | TCN ${order.tcn ?? "pending"}`,
-        `Group ${group.id} | ETLs ${group.etls.map((e) => e.number).join(", ")}`,
-        `Tech ${email} | Team ${team}`,
+        `Site ${order.site_id} | WO ${order.wo ?? "pending"}`,
+        `TCN ${order.tcn ?? "pending"}`,
+        `ETLs ${group.etls.map((e) => e.number).join(", ")} | ${group.id}`,
+        `Member ${email.split("@")[0]} | Team ${team}`,
       ];
       const ready = new Promise<void>((resolve) => {
         imageReadyRef.current = resolve;
