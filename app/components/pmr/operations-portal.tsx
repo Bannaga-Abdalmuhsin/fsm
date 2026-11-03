@@ -39,7 +39,8 @@ function Portal({ member: m }: { member: Member }) {
   const mode = path.split("/")[1] || "dashboard";
   const [period, setPeriod] = useState(""),
     [region, setRegion] = useState(""),
-    [team, setTeam] = useState("");
+    [team, setTeam] = useState(""),
+    [photoScope, setPhotoScope] = useState("operational");
   const periods = useQuery({
     queryKey: ["project-wo-periods"],
     queryFn: projectWOPeriods,
@@ -48,6 +49,7 @@ function Portal({ member: m }: { member: Member }) {
   const q = useQuery({
     queryKey: ["portal-operations", m.ownerEmail, active],
     enabled: !!active,
+    refetchInterval: 15000,
     queryFn: async () => {
       const [issued, orders, handoffs] = await Promise.all([
         projectWorkOrders(active),
@@ -57,13 +59,16 @@ function Portal({ member: m }: { member: Member }) {
       return {
         issued,
         orders: orders.filter(
-          (o) => o.month === active && o.inventory.admin_test !== true,
+          (o) => o.month === active,
         ),
         handoffs,
       };
     },
   });
-  const all = q.data?.orders ?? [];
+  const scopedOrders = q.data?.orders ?? [];
+  const all = scopedOrders.filter(o => mode === "photos"
+    ? (photoScope === "tests" ? m.role === "admin" && o.inventory.admin_test === true : o.inventory.admin_test !== true)
+    : o.inventory.admin_test !== true);
   const orders = all.filter(
     (o) => (!region || o.region === region) && (!team || o.team === team),
   );
@@ -512,7 +517,9 @@ function Portal({ member: m }: { member: Member }) {
               ))}
             </select>
           </div>
-          <Photos key={active + region + team} orders={orders} />
+          {m.role === "admin" ? <div className="office-filters"><label>Photo source <select aria-label="Photo source" value={photoScope} onChange={e=>setPhotoScope(e.target.value)}><option value="operational">Operational WOs</option><option value="tests">Admin test WOs</option></select></label></div> : null}
+          {photoScope === "tests" ? <Notice>ADMIN TEST evidence — excluded from operational performance, approvals and stc submission.</Notice> : null}
+          <Photos key={active + region + team + photoScope} orders={orders} />
         </>
       ) : null}
     </Page>
@@ -586,6 +593,7 @@ function Photos({ orders }: { orders: Order[] }) {
   const ids = orders.map((o) => o.id);
   const q = useQuery({
     queryKey: ["portal-photos", ids.join(","), page, group],
+    refetchInterval: 15000,
     queryFn: async () => {
       if (!ids.length) return [];
       let req = getSupabase()
@@ -678,6 +686,7 @@ function PhotoCard({ photo: p, order: o }: { photo: Photo; order: Order }) {
           <small>
             WO {o.wo} · {o.region} · {o.team}
           </small>
+          {o.inventory.admin_test === true ? <span className="office-badge">ADMIN TEST</span> : null}
           <span className="office-badge">{p.state}</span>
           <small>
             {new Date(p.captured_at).toLocaleString("en-GB", {
