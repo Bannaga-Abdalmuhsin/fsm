@@ -354,10 +354,9 @@ export function OrderScreen({
                         }
                         disabled={busy || photo.uploading}
                         onPress={() =>
-                          void run(async () => {
-                            await retryEvidence(order.assignee, g.id, order.id);
-                            await refresh();
-                          })
+                          void retryEvidence(order.assignee, g.id, order.id)
+                            .then(refresh)
+                            .catch((e) => setMessage(e.message))
                         }
                       />
                     ) : null}
@@ -528,10 +527,9 @@ export function OrderScreen({
           label={t("retry")}
           disabled={busy}
           onPress={() =>
-            void run(async () => {
-              await retryEvidence(order.assignee);
-              await refresh();
-            })
+            void retryEvidence(order.assignee)
+              .then(refresh)
+              .catch((e) => setMessage(e.message))
           }
         />
       </View>
