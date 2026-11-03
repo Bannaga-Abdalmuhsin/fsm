@@ -27,6 +27,7 @@ export type LocalEvidence = {
   original: { path: string; sha256: string };
   derivative: { path: string; sha256: string };
   uploadState:
+    | "draft"
     | "queued"
     | "uploading"
     | "uploaded"
@@ -88,6 +89,14 @@ async function save(row: LocalEvidence) {
   pending.move(current);
   for (const listener of listeners) listener(row.technician);
 }
+// Only the explicit group submission releases newly captured local drafts.
+export async function submitGroupEvidence(email: string, orderId: string, groupId: string) {
+  for (const row of await queuedEvidence(email)) {
+    if (!row.supersededBy && row.orderId === orderId && row.groupId === groupId && row.uploadState === "draft")
+      await save({...row, uploadState: "queued", nextAttemptAt: 0});
+  }
+  await retryEvidence(email, groupId, orderId);
+}
 export async function retryEvidence(
   email: string,
   groupId?: string,
@@ -98,6 +107,7 @@ export async function retryEvidence(
     if (
       !row.supersededBy &&
       row.uploadState !== "uploaded" &&
+      row.uploadState !== "draft" &&
       (!groupId || row.groupId === groupId) &&
       (!orderId || row.orderId === orderId)
     )
@@ -123,6 +133,7 @@ async function drain(email: string) {
     if (
       row.supersededBy ||
       row.uploadState === "uploaded" ||
+      row.uploadState === "draft" ||
       row.uploadState === "blocked" ||
       (row.nextAttemptAt ?? 0) > Date.now()
     )
@@ -204,6 +215,13 @@ async function drain(email: string) {
             : `Upload failed (${response.status}).`,
         );
       }
+      const receipt = await response.json();
+      if (receipt.status !== "registered" || receipt.capture_id !== row.evidenceId)
+        throw new Error("Upload confirmation missing. Your photo remains saved on this device; retry submission.");
+      const {data: confirmed, error: confirmationError} = await supabase.from("pmr_evidence")
+        .select("id,order_id,group_id").eq("id", row.evidenceId).maybeSingle();
+      if (confirmationError || !confirmed || confirmed.order_id !== row.orderId || confirmed.group_id !== row.groupId)
+        throw new Error("Photo registration could not be verified. Retry to confirm the saved photo.");
       await save({
         ...row,
         uploadState: "uploaded",
