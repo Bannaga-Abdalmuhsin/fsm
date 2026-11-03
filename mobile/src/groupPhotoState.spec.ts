@@ -9,3 +9,5 @@ describe('captured photos remain visible before upload',()=>{
  it('does not double count local and server versions of the same photo',()=>{expect(groupPhotoState('S01',[local('a')],[remote('a')])).toMatchObject({count:1,taken:true,uploaded:true,pending:[]})});
  it('hides replaced missing captures but keeps the new photo',()=>{expect(groupPhotoState('S01',[{...local('old','blocked'),supersededBy:'new'},local('new')],[])).toMatchObject({count:1,taken:true,failed:false})});
 });
+
+it('requires server visibility even when a legacy local record says uploaded',()=>{expect(groupPhotoState('S01',[local('a','uploaded')],[])).toMatchObject({taken:true,uploaded:false,pending:[local('a','uploaded')]})});
