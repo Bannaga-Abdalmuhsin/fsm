@@ -2,7 +2,7 @@
   "expo": {
     "name": "BM FSM PMR",
     "slug": "bm-fsm-pmr",
-    "version": "0.3.2",
+    "version": "0.3.3",
     "orientation": "portrait",
     "scheme": "bmfsmpmr",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     "ios": {
       "bundleIdentifier": "com.businessmagnificence.fsm",
       "supportsTablet": false,
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "android": {
       "package": "com.businessmagnificence.fsm",
@@ -24,7 +24,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "versionCode": 6
+      "versionCode": 7
     },
     "plugins": [
       "expo-secure-store",
