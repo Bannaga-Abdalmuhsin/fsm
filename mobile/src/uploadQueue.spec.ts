@@ -66,6 +66,7 @@ vi.mock("expo-file-system", () => {
 vi.mock("expo/fetch", () => ({ fetch: state.fetch }));
 vi.mock("./supabase", () => ({
   supabase: {
+    from: () => ({select: () => ({eq: (_key: string, id: string) => ({maybeSingle: async () => ({data: {id, order_id: "wo", group_id: "O01"}, error: null})})})}),
     auth: {
       getSession: async () => ({
         data: {
@@ -150,7 +151,7 @@ describe("durable native photo uploads", () => {
   });
   it("marks a successful upload persistently and does not upload it twice", async () => {
     seed();
-    state.fetch.mockResolvedValue(new Response("{}"));
+    state.fetch.mockResolvedValue(new Response(JSON.stringify({status:"registered",capture_id:"a"})));
     const q = await import("./uploadQueue");
     await q.flushEvidence(state.email);
     await q.flushEvidence(state.email);
@@ -185,7 +186,7 @@ describe("durable native photo uploads", () => {
       uploadState: "blocked",
       lastError: "Wrong equipment",
     });
-    state.fetch.mockResolvedValue(new Response("{}"));
+    state.fetch.mockResolvedValue(new Response(JSON.stringify({status:"registered",capture_id:"a"})));
     await q.retryEvidence(state.email);
     expect((await q.queuedEvidence(state.email))[0].uploadState).toBe(
       "uploaded",
@@ -225,7 +226,7 @@ describe("Expo multipart compatibility and iPhone path recovery", () => {
       expect(JSON.parse(String(parsed.get("metadata"))).capture_id).toBe("a");
       expect(await (parsed.get("original") as Blob).text()).toBe("original");
       expect(parsed.get("stamped")).toBeNull();
-      return new Response("{}");
+      return new Response(JSON.stringify({status:"registered",capture_id:"a"}));
     });
     const q = await import("./uploadQueue");
     await q.flushEvidence(state.email);
@@ -248,7 +249,7 @@ describe("Expo multipart compatibility and iPhone path recovery", () => {
       },
     };
     state.files.set("document/evidence/a/metadata.json", JSON.stringify(old));
-    state.fetch.mockResolvedValue(new Response("{}"));
+    state.fetch.mockResolvedValue(new Response(JSON.stringify({status:"registered",capture_id:"a"})));
     const q = await import("./uploadQueue");
     await q.flushEvidence(state.email);
     const [r] = await q.queuedEvidence(state.email);
@@ -296,4 +297,18 @@ it("preserves an oversized rejected original but stops retrying it after recaptu
   );
   expect(old?.supersededBy).toBe("replacement");
   expect(state.files.get(row().original.path)).toBe("original");
+});
+
+describe("explicit group submission and receipts",()=>{
+ it("never auto uploads an unsubmitted photo draft",async()=>{
+  seed({...row(),uploadState:"draft"});
+  const q=await import("./uploadQueue");await q.flushEvidence(state.email);await q.retryEvidence(state.email);
+  expect(state.fetch).not.toHaveBeenCalled();expect((await q.queuedEvidence(state.email))[0].uploadState).toBe("draft");
+  state.fetch.mockResolvedValue(new Response(JSON.stringify({status:"registered",capture_id:"a"})));
+  await q.submitGroupEvidence(state.email,"wo","O01");expect((await q.queuedEvidence(state.email))[0].uploadState).toBe("uploaded");
+ });
+ it("does not label an arbitrary successful HTTP response uploaded",async()=>{
+  seed();state.fetch.mockResolvedValue(new Response("{}"));const q=await import("./uploadQueue");await q.flushEvidence(state.email);
+  expect((await q.queuedEvidence(state.email))[0].uploadState).toBe("retry");
+ });
 });
