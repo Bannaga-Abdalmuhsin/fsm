@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import "./auth-sign-in.css";
 import { Navigate } from "react-router";
 
 import { SetupRequired } from "@/components/pmr/pmr-shell";
@@ -7,8 +8,7 @@ import { supabaseConfigured } from "@/lib/supabase";
 
 const FONT_STACK = '"Space Grotesk", "Segoe UI", Arial, sans-serif';
 
-const inputClass =
-  "mt-2 h-12 w-full rounded-md border border-[#1F4A3A] bg-[#0A1F17] px-3 text-base text-white placeholder:text-[#A9C7BB]/60 focus:border-[#34D399] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#34D399]/60";
+const inputClass = "bm-login-input";
 
 export default function LoginRoute() {
   const { state, signIn, requestPasswordReset } = useAuth();
@@ -48,40 +48,66 @@ export default function LoginRoute() {
   }
 
   return (
-    <div
-      className="flex min-h-full w-full flex-col items-center justify-center bg-[#06140F] px-4 py-10 text-white sm:px-6"
-      style={{ fontFamily: FONT_STACK }}
-    >
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
-      />
-      <title>PMR Evidence Verification</title>
-
-      <div className="w-full max-w-md">
-        <header className="flex flex-col items-center text-center">
-          <img
-            src="/brand/bm-logo.webp"
-            alt="Business Magnificence logo"
-            width={800}
-            height={800}
-            className="h-24 w-24 object-contain sm:h-28 sm:w-28"
-          />
-          <p className="mt-4 text-sm font-medium uppercase tracking-[0.2em] text-[#A9C7BB]">
-            Business Magnificence
+    <main className="bm-login" style={{ fontFamily: FONT_STACK }}>
+      <title>Sign in | BM FSM PMR</title>
+      <div className="bm-login-dots" aria-hidden="true" />
+      <div className="bm-login-wave" aria-hidden="true" />
+      <header className="bm-login-brand">
+        <img
+          src="/brand/bm-logo.webp"
+          alt="Business Magnificence"
+          width={64}
+          height={64}
+        />
+        <div>
+          <strong>Business Magnificence</strong>
+          <span>FIELD SERVICE MANAGEMENT</span>
+        </div>
+      </header>
+      <div className="bm-login-layout">
+        <section className="bm-login-intro" aria-label="PMR office portal">
+          <p className="bm-login-eyebrow">
+            <span /> STC COW · NATIONAL OPERATIONS
           </p>
-          <h1 className="mt-2 bg-[linear-gradient(90deg,#7DD3FC_0%,#5EEAD4_38%,#34D399_70%,#A3E635_100%)] bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">
-            PMR Evidence Verification
+          <h1>
+            Field evidence.
+            <br />
+            <em>Complete confidence.</em>
           </h1>
-        </header>
-
-        <div className="mt-8 rounded-xl border border-[#0F2A20] bg-[#0B1C15] p-6 shadow-[0_0_60px_-12px_rgba(52,211,153,0.35)] sm:p-8">
-          <h2 className="text-xl font-semibold text-white">
+          <p className="bm-login-description">
+            One connected workspace to review PMR evidence, approve work orders
+            and prepare every submission.
+          </p>
+          <ol className="bm-login-flow" aria-label="Submission workflow">
+            <li>
+              <span>01</span>Field capture
+            </li>
+            <li>
+              <span>02</span>Regional review
+            </li>
+            <li>
+              <span>03</span>FSM handover
+            </li>
+          </ol>
+        </section>
+        <section className="bm-login-card" aria-label="Account access">
+          <div className="bm-login-card-top">
+            <span className="bm-login-mark">
+              BM<span> / FSM</span>
+            </span>
+            <span className="bm-login-private">INTERNAL PORTAL</span>
+          </div>
+          <h2 className="text-3xl font-semibold tracking-tight text-[#143a2a]">
             {mode === "signin" ? "Sign in" : "Reset password"}
           </h2>
 
+          <p className="bm-login-card-description">
+            {mode === "signin"
+              ? "Welcome back. Sign in with your work account."
+              : "Enter your work email to request a reset link."}
+          </p>
           <form onSubmit={submit} className="mt-6 space-y-5">
-            <label className="block text-sm font-medium text-[#A9C7BB]">
+            <label className="block text-sm font-medium text-[#53685d]">
               Email
               <input
                 id="sign-in-email"
@@ -95,7 +121,7 @@ export default function LoginRoute() {
             </label>
 
             {mode === "signin" && (
-              <div className="block text-sm font-medium text-[#A9C7BB]">
+              <div className="block text-sm font-medium text-[#53685d]">
                 <label htmlFor="sign-in-password">Password</label>
                 <div className="relative">
                   <input
@@ -115,7 +141,7 @@ export default function LoginRoute() {
                       showPassword ? "Hide password" : "Show password"
                     }
                     onClick={() => setShowPassword((value) => !value)}
-                    className="absolute inset-y-0 right-0 my-2 mr-2 min-w-[44px] rounded-md px-3 text-sm font-medium text-[#5EEAD4] hover:bg-[#0F2A20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#34D399]/60"
+                    className="absolute inset-y-0 right-0 my-2 mr-2 min-w-[44px] rounded-md px-3 text-sm font-medium text-[#157448] hover:bg-[#eaf3ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#34D399]/60"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -123,18 +149,18 @@ export default function LoginRoute() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="h-12 w-full rounded-md bg-[#34D399] px-4 text-base font-semibold text-[#041009] transition-colors hover:bg-[#059669] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A3E635] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {mode === "signin" ? "Sign in" : "Send reset link"}
+            <button type="submit" disabled={busy} className="bm-login-submit">
+              {busy
+                ? "Please wait…"
+                : mode === "signin"
+                  ? "Sign in →"
+                  : "Send reset link"}
             </button>
           </form>
 
           <button
             type="button"
-            className="mt-5 min-h-[44px] text-sm font-medium text-[#5EEAD4] underline underline-offset-4 hover:text-[#A3E635] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#34D399]/60"
+            className="mt-5 min-h-[44px] text-sm font-medium text-[#157448] underline underline-offset-4 hover:text-[#0d5031] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#34D399]/60"
             onClick={() => {
               setError(null);
               setNotice(null);
@@ -147,18 +173,25 @@ export default function LoginRoute() {
           {error && (
             <div
               role="alert"
-              className="mt-5 rounded-md border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-100"
+              className="mt-5 rounded-md border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-800"
             >
               {error}
             </div>
           )}
           {notice && (
-            <p role="status" className="mt-5 text-sm text-[#A9C7BB]">
+            <p role="status" className="mt-5 text-sm text-[#53685d]">
               {notice}
             </p>
           )}
-        </div>
+          <p className="bm-login-access-note">
+            Access is managed by your administrator.
+          </p>
+        </section>
       </div>
-    </div>
+      <footer className="bm-login-footer">
+        <span>BM FSM PMR</span>
+        <span>Engineering excellence. Nationwide reliability.</span>
+      </footer>
+    </main>
   );
 }
