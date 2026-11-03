@@ -81,7 +81,8 @@ export function Shell({
           <img src="/brand/bm-logo.webp" alt="BM"/> <span>FSM PMR <small>Regional operations portal</small></span>
         </Link>
         <nav className="flex flex-1 flex-wrap gap-3 text-sm">
-          <Link to="/">Work orders</Link>
+          <Link to="/project-orders">Issued WOs</Link>
+          <Link to="/field-submissions">Field submissions</Link>
           {canSchedule(member) && <Link to="/admin/orders">Scheduling</Link>}
           {member.role === "admin" && <Link to="/admin/access">People & access</Link>}
         </nav>

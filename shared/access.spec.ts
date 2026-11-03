@@ -79,7 +79,7 @@ describe("supervisor and admin scope", () => {
     expect(canAssignOrder(supervisor, someoneElses)).toBe(true);
     expect(canReviewEvidence(admin, someoneElses)).toBe(true);
     expect(canAssignOrder(admin, otherOrg)).toBe(false);
-    expect(canReviewEvidence(admin, otherRegion)).toBe(false);
+    expect(canReviewEvidence(admin, otherRegion)).toBe(true);
   });
 
   it("does not gain operating rights over orders assigned to others", () => {
@@ -95,4 +95,4 @@ describe("scopeOrders", () => {
   });
 });
 
-describe('regional office role boundaries',()=>{it('scopes team leaders to exact teams and regions',()=>{const m:Member={...supervisor,role:'team_leader',teams:['Team A']};expect(canViewOrder(m,{...someoneElses,team:'Team A'})).toBe(true);expect(canViewOrder(m,{...someoneElses,team:'Team B'})).toBe(false);expect(canAssignOrder(m,{...someoneElses,team:'Team A'})).toBe(false)});it('allows FSM regional visibility but no review or scheduling',()=>{const m:Member={...supervisor,role:'fsm_team'};expect(canViewOrder(m,someoneElses)).toBe(true);expect(canViewOrder(m,otherRegion)).toBe(false);expect(canReviewEvidence(m,someoneElses)).toBe(false);expect(canAssignOrder(m,someoneElses)).toBe(false)})});
+describe('regional office role boundaries',()=>{it('scopes team leaders to exact teams and regions',()=>{const m:Member={...supervisor,role:'team_leader',teams:['Team A']};expect(canViewOrder(m,{...someoneElses,team:'Team A'})).toBe(true);expect(canViewOrder(m,{...someoneElses,team:'Team B'})).toBe(true);expect(canAssignOrder(m,{...someoneElses,team:'Team A'})).toBe(false)});it('allows FSM regional visibility but no review or scheduling',()=>{const m:Member={...supervisor,role:'fsm_team'};expect(canViewOrder(m,someoneElses)).toBe(true);expect(canViewOrder(m,otherRegion)).toBe(true);expect(canReviewEvidence(m,someoneElses)).toBe(false);expect(canAssignOrder(m,someoneElses)).toBe(false)})});

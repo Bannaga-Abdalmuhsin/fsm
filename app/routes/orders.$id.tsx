@@ -23,7 +23,7 @@ function OfficeOrder({member:m}:{member:Member}){
  const isApproved=(kind:string,target:string,fingerprint:string)=>r.reviews.some(v=>v.kind===kind&&v.target_id===target&&v.stage===level&&v.fingerprint===fingerprint&&v.decision==='approved');
  const exportAllowed=m.role!=='technician'&&(m.role!=='fsm_team'||o.status==='Approved'&&!test);
  return <Page title={`WO ${o.wo}`}>
-  <Link className="office-link" to="/">← Regional work orders</Link>
+  <Link className="office-link" to="/field-submissions">← Field submissions</Link>
   <div className="office-heading"><p>{o.siteId} · {o.siteType} · {o.region} · {o.team}</p><span className={`office-badge stage-${stage}`}>{stageLabel(o.status,r.handoff)}</span></div>
   {test?<Notice>ADMIN TEST — this submission cannot proceed to operational approval or FSM handoff.</Notice>:null}
   <ol className="office-flow">{stageLabels.map((s,i)=><li key={s} className={i<stage?'complete':i===stage?'current':''}><b>{i<stage?'✓':i+1}</b><span>{s}</span></li>)}</ol>
