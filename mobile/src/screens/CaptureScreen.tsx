@@ -415,6 +415,7 @@ export function CaptureScreen({
 
       {siteReady && !galleryApproval ? (
         <CameraView
+              responsiveOrientationWhenOrientationLocked
           ref={cameraRef}
           style={styles.camera}
           facing="back"
