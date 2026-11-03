@@ -30,6 +30,9 @@ async function runIngest({ provider = true, registerFails = false } = {}) {
           ? {
               order: {
                 id: meta.order_id,
+                assignee: "technician@example.com",
+                team: "Demo",
+                site_id: "DEMO", wo: "WO-DEMO", tcn: "TCN-DEMO",
                 checklist: [
                   { id: "O01", title: "Test group", etls: [{ number: 1 }] },
                 ],
