@@ -53,7 +53,7 @@ Deno.serve(async(req)=>{
   if(prior&&!reanalyze){if(prior.sha===sha&&prior.order_id===meta.order_id)return json(200,{status:'registered',capture_id:meta.capture_id});throw new IngestError(409,"Capture already registered with different content");}
   const group=order.checklist.find((g:{id:string})=>g.id===meta.group_id);
   if(!group||meta.linked_etls.some(n=>!group.etls.some((e:{number:number})=>e.number===n)))throw new IngestError(422,"Photo ETLs do not match the selected equipment group");
-  const image=decode(bytes,mime), metrics=imageMetrics(image), exif=await originalExif(bytes);
+  const exif=await originalExif(bytes), image=decode(bytes,mime,exif?.orientation??1), metrics=imageMetrics(image);
   meta.width=image.width;meta.height=image.height;
   if(meta.source==='gallery'){
     if(!exif?.capturedAt||!Number.isFinite(exif.latitude)||!Number.isFinite(exif.longitude))throw new IngestError(422,"Approved gallery photo needs original EXIF date, timezone and GPS");
@@ -84,7 +84,7 @@ Deno.serve(async(req)=>{
     analysis.findings.push({code:'admin_remote_test',message:'Admin remote test only. Actual GPS retained; not operational PMR evidence.',severity:'review',confidence:1});
   }
   const shifted=new Date(Date.parse(meta.captured_at)+3*3600000).toISOString();
-  const stamped=stampImage(image,[...(order.inventory?.admin_test ? ["ADMIN REMOTE TEST - NOT OPERATIONAL EVIDENCE"] : []),`${shifted.slice(0,10)} ${shifted.slice(11,19)} GMT+03:00`,`GPS ${Number(meta.gps.latitude).toFixed(6)}, ${Number(meta.gps.longitude).toFixed(6)} +/-${meta.gps.accuracy}M`,`SITE ${order.site_id} | WO ${order.wo} | TCN ${order.tcn}`,`GROUP ${group.id} | ETLS ${meta.linked_etls.join(',')}`,`TECH ${order.assignee} | TEAM ${order.team}`]);
+  const stamped=stampImage(image,[...(order.inventory?.admin_test ? ["ADMIN REMOTE TEST - NOT OPERATIONAL EVIDENCE"] : []),`${shifted.slice(0,10)} ${shifted.slice(11,19)} GMT+03:00`,`GPS ${Number(meta.gps.latitude).toFixed(6)}, ${Number(meta.gps.longitude).toFixed(6)} +/-${Math.round(meta.gps.accuracy)}M`,`SITE ${order.site_id} | WO ${order.wo} | TCN ${order.tcn}`,`GROUP ${group.id} | ETLS ${meta.linked_etls.join(',')}`,`TECH ${order.assignee} | TEAM ${order.team}`]);
   const derivativeSha=await sha256Hex(stamped),originalPath=objectPath(meta.order_id,meta.capture_id,mime,false),derivativePath=objectPath(meta.order_id,meta.capture_id,'image/jpeg',true);
   if (!reanalyze) { await storeOnce(client,originalPath,bytes,mime,sha);await storeOnce(client,derivativePath,stamped,'image/jpeg',derivativeSha); }
   const payload=buildPayload({meta,sha,derivativeSha,mime,originalPath,derivativePath,analysis,perceptualHash:metrics.perceptualHash});
