@@ -27,8 +27,8 @@ export const StampedPhoto = forwardRef<StampedPhotoHandle, Props>(function Stamp
         onLoadEnd={onImageLoaded}
       />
       <View style={styles.band}>
-        {lines.map((line) => (
-          <Text key={line} style={styles.line}>
+        {lines.map((line,index) => (
+          <Text key={line} numberOfLines={1} ellipsizeMode="tail" style={[styles.line,{fontSize:index<2?Math.max(12,width*.027):Math.max(9,width*.020)}]}>
             {line}
           </Text>
         ))}
@@ -40,7 +40,7 @@ export const StampedPhoto = forwardRef<StampedPhotoHandle, Props>(function Stamp
 const styles = StyleSheet.create({
   band: {
     position: "absolute",
-    left: 0,
+    width: "68%",
     right: 0,
     bottom: 0,
     padding: 10,
@@ -54,6 +54,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
     fontFamily: fonts.medium,
     fontSize: 13,
-    lineHeight: 18,
+
   },
 });
