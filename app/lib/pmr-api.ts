@@ -25,12 +25,21 @@ import {
 import { EVIDENCE_BUCKET, getSupabase } from "@/lib/supabase";
 
 export async function fetchOrders(member: Member): Promise<Order[]> {
-  const { data, error } = await getSupabase()
-    .from("pmr_orders")
-    .select("*")
-    .order("scheduled_start", { ascending: true });
-  if (error) throw error;
-  return scopeOrders(member, data.map(toOrder));
+  const rows: Order[] = [];
+  for (let start = 0; start < 10000; start += 1000) {
+    const { data, error } = await getSupabase()
+      .from("pmr_orders")
+      .select("*")
+      .order("scheduled_start", { ascending: true })
+      .order("id")
+      .range(start, start + 999);
+    if (error) throw error;
+    rows.push(...data.map(toOrder));
+    if (data.length < 1000) return scopeOrders(member, rows);
+  }
+  throw new Error(
+    "Work order limit reached; narrow the reporting scope with your administrator.",
+  );
 }
 
 export async function fetchOrder(id: string, member: Member): Promise<Order> {
@@ -272,9 +281,18 @@ async function sha256Hex(buffer: ArrayBuffer) {
   ).join("");
 }
 
-export async function exportOrderPackage(orderId:string,wo:string){
- const {data,error}=await getSupabase().functions.invoke("submission-export",{body:{orderId}});
- if(error)throw new Error("Export failed. Confirm office access and retry.");
- if(!(data instanceof Blob))throw new Error("Export did not return a ZIP package.");
- const url=URL.createObjectURL(data);const a=document.createElement("a");a.href=url;a.download=`WO-${wo.replace(/[^a-zA-Z0-9_-]/g,"_")}.zip`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+export async function exportOrderPackage(orderId: string, wo: string) {
+  const { data, error } = await getSupabase().functions.invoke(
+    "submission-export",
+    { body: { orderId } },
+  );
+  if (error) throw new Error("Export failed. Confirm office access and retry.");
+  if (!(data instanceof Blob))
+    throw new Error("Export did not return a ZIP package.");
+  const url = URL.createObjectURL(data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `WO-${wo.replace(/[^a-zA-Z0-9_-]/g, "_")}.zip`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
