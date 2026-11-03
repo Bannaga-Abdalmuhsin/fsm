@@ -83,3 +83,7 @@ New captures remain local drafts until Submit group & photos saves the group res
 ### Transparent evidence stamp (0.3.5)
 
 New server derivatives retain the displayed photo aspect ratio and use a bottom-right white text overlay with a narrow shadow, without a solid footer. EXIF orientation is normalized once; no aspect-ratio-based rotation is applied. Native iOS capture follows device orientation even when the app UI is portrait locked. Stamps retain actual capture time, GPS with rounded accuracy, WO/site/TCN, ETLs and technician/team identity. Existing registered files remain immutable. Google reverse geocoding is not configured; phone GPS and CMDB remain authoritative, and any future address lookup must not block capture.
+
+### Smooth timestamp and iOS orientation (0.3.6)
+
+Capture now retains native EXIF orientation with processing enabled. SDK 58 iOS omits orientation metadata in its exif=false encoding path; retaining it lets the server normalize the original display orientation exactly once. Canonical stamps use bundled licensed outline glyphs with subpixel antialiasing, proportional sizing, a transparent bottom-right block and a subtle shadow. Long identifiers are ellipsized visually while full identifiers remain in authoritative records and exports. No runtime font downloads or third-party photo transmission is introduced. The original file remains unchanged. Previously registered evidence is not rewritten.
