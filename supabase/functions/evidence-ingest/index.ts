@@ -66,7 +66,7 @@ Deno.serve(async(req)=>{
   if(!Number.isFinite(Date.parse(meta.captured_at))||Date.parse(meta.captured_at)>Date.now()+120000||Date.parse(meta.captured_at)<Date.parse(order.tcn_start)||Date.parse(meta.captured_at)>Date.parse(order.tcn_end))throw new IngestError(422,"Photo capture time is outside the TCN window");
   const provider=visionProvider(env,{group:group.title,etls:group.etls,capturedAt:meta.captured_at,siteType:order.site_type,onAir:order.site_reference?.site_status??'unknown',policy:order.policy});
   let analysis:AnalysisResult;
-  try{analysis=await analyzeEvidence(provider,provider?.name??null,'Vision provider not configured',{bytes,mime,linkedEtls:meta.linked_etls});}
+  try{analysis=!reanalyze ? {status:'unavailable',provider:provider?.name??null,reason:provider?'Photo stored; analysis queued':'Vision provider not configured'} : await analyzeEvidence(provider,provider?.name??null,'Vision provider not configured',{bytes,mime,linkedEtls:meta.linked_etls});}
   catch{analysis={status:'unavailable',provider:provider?.name??null,reason:'Vision service failed; retry analysis required'};}
   if(analysis.status==='complete'){
     const findings=analysis.findings as {code:string;message:string;severity:string;confidence:number}[];
@@ -93,6 +93,15 @@ Deno.serve(async(req)=>{
   if(secretError||typeof secret!=='string')throw new IngestError(503,'Evidence signing unavailable');
   const {error:registerError}=await client.rpc(reanalyze ? 'pmr_update_analysis' : 'pmr_register_evidence',{p_payload:payload,p_signature:await hmacSha256Hex(secret,payload)});
   if(registerError)throw new IngestError(422,registerError.message.slice(0,300));
+  if(!reanalyze && provider) {
+    // Respond after durable storage/registration. Independent QC cannot approve pending evidence.
+    // Retry uses the same caller JWT and the existing RLS-protected analysis endpoint.
+    const task=fetch(`${url}/functions/v1/evidence-ingest`,{
+      method:'POST',headers:{Authorization:`Bearer ${jwt}`,apikey:key,'content-type':'application/json'},
+      body:JSON.stringify({reanalyze:meta.capture_id}),signal:AbortSignal.timeout(60000),
+    }).then(async response=>{await response.arrayBuffer();if(!response.ok)console.warn('Background evidence analysis deferred',response.status);}).catch(()=>console.warn('Background evidence analysis deferred'));
+    EdgeRuntime.waitUntil(task);
+  }
   return json(201,{status:'registered',capture_id:meta.capture_id,analysis:analysis.status});
  }catch(e){return e instanceof IngestError?json(e.status,{error:e.message}):json(500,{error:'Evidence ingest failed; retry later'});}
 });
