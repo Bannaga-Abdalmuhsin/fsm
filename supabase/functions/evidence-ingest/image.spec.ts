@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import jpeg from 'jpeg-js';
-import { decode, imageMetrics, originalExif, orientImage, stampImage } from './image.ts';
+import { decode, imageMetrics, originalExif, orientImage, stampImage, stampLayout, fitStampText } from './image.ts';
 import { visionProvider } from './vision.ts';
 const image = { width:64,height:48,data:new Uint8Array(64*48*4) };
 for(let y=0;y<48;y++)for(let x=0;x<64;x++){const at=(y*64+x)*4;image.data[at]=x*4;image.data[at+1]=y*5;image.data[at+2]=(x+y)%2?255:0;image.data[at+3]=255;}
@@ -54,4 +54,19 @@ describe('orientation and transparent overlay',()=>{
   const result=decode(stampImage({width:600,height:800,data},['2026-11-03 16:00:00','ETLS 1,2 | TEAM A']),'image/jpeg');
   expect(result).toMatchObject({width:600,height:800});const at=(799*600+1)*4;expect(result.data[at+1]).toBeGreaterThan(100);
  });
+});
+
+describe('smooth compact timestamp',()=>{
+ it('reads the actual EXIF orientation from JPEG bytes before rendering',async()=>{
+  const jpg=jpeg.encode(image,90).data;
+  const payload=Buffer.from('45786966000049492a0008000000010012010300010000000600000000000000','hex');
+  const length=payload.length+2;const file=Buffer.concat([jpg.subarray(0,2),Buffer.from([255,225,length>>8,length&255]),payload,jpg.subarray(2)]);
+  const exif=await originalExif(file);expect(exif?.orientation).toBe(6);
+  expect(decode(file,'image/jpeg',exif?.orientation)).toMatchObject({width:48,height:64});
+ });
+ it.each([[900,1600],[1200,675]])('keeps long references inside a compact block at %ix%i',(w,h)=>{
+  const rows=stampLayout(w,h,['2026-11-03 16:00:00 (Riyadh)','GPS 0.000000, 0.000000 +/-5 m','WO '+ 'LONG'.repeat(50),'ETLs 1,2,3','Member example | Team example']);
+  expect(rows).toHaveLength(5);expect(rows.every(r=>r.left>=w*.29&&r.baseline<h)).toBe(true);expect(rows[2].text.endsWith('…')).toBe(true);
+ });
+ it('uses actual font widths when fitting mixed-width characters',()=>{expect(fitStampText('iiiiiiiiii',20,80)).toBe('iiiiiiiiii');expect(fitStampText('WWWWWWWWWW',20,80).endsWith('…')).toBe(true)});
 });
