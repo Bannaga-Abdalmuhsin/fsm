@@ -1,6 +1,7 @@
+import "./operations-portal.css";
 import { canSchedule, roleLabel, type Member } from "@shared/access";
 import { useState, type ReactNode } from "react";
-import { Link, Navigate, useLocation } from "react-router";
+import { Link, NavLink, Navigate, useLocation } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -75,36 +76,80 @@ export function Shell({
   const { signOut } = useAuth();
   const [error, setError] = useState<string | null>(null);
   return (
-    <div className="office-shell flex min-h-full flex-col">
-      <header className="office-header">
-        <Link to="/" className="office-brand">
-          <img src="/brand/bm-logo.webp" alt="BM"/> <span>FSM PMR <small>Regional operations portal</small></span>
+    <div className="office-shell portal-shell">
+      <aside className="portal-sidebar">
+        <Link to="/dashboard" className="office-brand">
+          <img src="/brand/bm-logo.webp" alt="BM" />
+          <span>
+            FSM PMR<small>Operations portal</small>
+          </span>
         </Link>
-        <nav className="flex flex-1 flex-wrap gap-3 text-sm">
-          <Link to="/project-orders">Issued WOs</Link>
-          <Link to="/field-submissions">Field submissions</Link>
-          {canSchedule(member) && <Link to="/admin/orders">Scheduling</Link>}
-          {member.role === "admin" && <Link to="/admin/access">People & access</Link>}
+        <p className="portal-nav-label">WORKSPACE</p>
+        <nav aria-label="Main navigation">
+          {[
+            ["/dashboard", "◫", "Dashboard"],
+            ["/project-orders", "▤", "Monthly work orders"],
+            ["/field-submissions", "▥", "Field submissions"],
+            ["/region-team", "◎", "Region team"],
+            ["/field-teams", "◉", "Field team control"],
+            ["/photos", "▧", "Photo explorer"],
+            ["/reports", "⇩", "FSM reports"],
+            ["/settings", "⚙", "Settings"],
+          ]
+            .filter(
+              ([path]) =>
+                member.role !== "technician" ||
+                ["/field-submissions", "/photos", "/settings"].includes(path),
+            )
+            .map(([path, icon, label]) => (
+              <NavLink key={path} to={path}>
+                <span aria-hidden="true">{icon}</span>
+                {label}
+              </NavLink>
+            ))}
+          {canSchedule(member) && (
+            <NavLink to="/admin/orders">
+              <span aria-hidden="true">＋</span>TCN / MDT scheduling
+            </NavLink>
+          )}
+          {member.role === "admin" && (
+            <NavLink to="/admin/access">
+              <span aria-hidden="true">♙</span>People & access
+            </NavLink>
+          )}
         </nav>
-        <span className="text-xs text-muted-foreground">
-          {member.ownerEmail} · {roleLabel(member.role)} · {member.regions.join(" / ")}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            signOut().catch(() => setError("Sign out failed. Try again."))
-          }
-        >
-          Sign out
-        </Button>
-      </header>
-      {error && (
-        <div className="p-4">
-          <Notice>{error}</Notice>
+        <div className="portal-sidebar-footer">
+          <strong>BM · stc COW</strong>
+          <small>Monthly preventive maintenance</small>
         </div>
-      )}
-      {children}
+      </aside>
+      <div className="portal-main">
+        <header className="portal-topbar">
+          <span>
+            {["admin", "fsm_team"].includes(member.role)
+              ? "All regions"
+              : member.regions.join(" / ")}
+            <small>PMR OPERATIONS</small>
+          </span>
+          <div>
+            <span>
+              {member.ownerEmail}
+              <small>{roleLabel(member.role)}</small>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                signOut().catch(() => setError("Sign out failed. Try again."))
+              }
+            >
+              Sign out
+            </Button>
+          </div>
+        </header>
+        {error && <Notice>{error}</Notice>}
+        {children}
+      </div>
     </div>
   );
 }
@@ -142,5 +187,5 @@ export function RequireMember({
       </Page>
     );
   }
-  return <Shell member={state.member}>{render(state.member)}</Shell>;
+  return <>{render(state.member)}</>;
 }
