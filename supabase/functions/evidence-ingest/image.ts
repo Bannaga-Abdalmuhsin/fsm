@@ -13,7 +13,7 @@ export function decode(bytes: Uint8Array, mime: Mime): Pixels {
       if (view.getUint32(16) * view.getUint32(20) > 16000000) throw new Error("Too many pixels");
       return (PNG as unknown as {sync:{read(input:Buffer):Pixels}}).sync.read(Buffer.from(bytes));
     }
-  } catch { throw new IngestError(422, "Image cannot be decoded or exceeds 16 megapixels."); }
+  } catch { throw new IngestError(422, "Retake required: image exceeds decoder limits or is not a supported JPEG/PNG. Use the updated app camera at the evidence photo size."); }
   throw new IngestError(415, "Use an original JPEG or PNG image.");
 }
 export function imageMetrics(image: Pixels) {
