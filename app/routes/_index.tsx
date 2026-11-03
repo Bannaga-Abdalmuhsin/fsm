@@ -5,9 +5,7 @@ export default function HomeRoute() {
     <RequireMember
       render={(m) => (
         <Navigate
-          to={
-            m.role === "technician" ? "/field-submissions" : "/project-orders"
-          }
+          to={m.role === "technician" ? "/field-submissions" : "/dashboard"}
           replace
         />
       )}
