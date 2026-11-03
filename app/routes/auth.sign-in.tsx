@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import "./auth-sign-in.css";
+import "@/components/pmr/auth-sign-in.css";
 import { Navigate } from "react-router";
 
 import { SetupRequired } from "@/components/pmr/pmr-shell";
