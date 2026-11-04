@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {groupPhotoState} from './groupPhotoState';
+import {groupPhotoState,isGroupClosed} from './groupPhotoState';
 import type {LocalEvidence} from './uploadQueue';
 import type {Evidence} from './api';
 const local=(id:string,state='queued')=>({evidenceId:id,groupId:'S01',uploadState:state} as LocalEvidence);
@@ -11,3 +11,11 @@ describe('captured photos remain visible before upload',()=>{
 });
 
 it('requires server visibility even when a legacy local record says uploaded',()=>{expect(groupPhotoState('S01',[local('a','uploaded')],[])).toMatchObject({taken:true,uploaded:false,pending:[local('a','uploaded')]})});
+
+it('closes a saved five-ETL group only after three usable uploads and no pending retakes', () => {
+  const uploaded = [remote('a'), remote('b'), remote('c')];
+  expect(isGroupClosed(undefined, 3, groupPhotoState('S01', [], uploaded))).toBe(false);
+  expect(isGroupClosed('Pass', 3, groupPhotoState('S01', [local('c')], uploaded.slice(0,2)))).toBe(false);
+  expect(isGroupClosed('Pass', 3, groupPhotoState('S01', [], uploaded))).toBe(true);
+  expect(isGroupClosed('Pass', 3, groupPhotoState('S01', [], [...uploaded, {...remote('rejected'),state:'Retake required'}]))).toBe(false);
+});

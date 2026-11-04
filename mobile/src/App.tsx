@@ -11,6 +11,7 @@ import { supabase } from "./supabase";
 import { supabaseConfigured } from "./config";
 import { colors, fonts } from "./theme";
 import { getFix, measureClockOffset } from "./evidence";
+import { listenForAssignments, pushEnabled, registerPushDevice, unregisterPushDevice } from "./pushNotifications";
 import { flushEvidence } from "./uploadQueue";
 import { AdminScreen } from "./screens/AdminScreen";
 import { ReviewScreen } from "./screens/ReviewScreen";
@@ -31,6 +32,7 @@ function AppContent() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState<Route>({ name: "orders" });
 
@@ -60,6 +62,43 @@ function AppContent() {
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") upload(); });
     return () => { clearInterval(timer); subscription.remove(); };
   }, [session?.user.id]);
+
+  const userId = session?.user.id;
+  const role = membership?.state === "ready" ? membership.member.role : null;
+  useEffect(() => {
+    if (!pushEnabled || !userId || role !== "technician") return;
+    let active = true;
+    let registering = false;
+    const register = async () => {
+      if (registering) return;
+      registering = true;
+      try {
+        await registerPushDevice(userId, () => active);
+        if (active) setPushError(null);
+      } catch {
+        if (active) setPushError("Work order notifications are unavailable. Try reopening the app.");
+      } finally {
+        registering = false;
+      }
+    };
+    void register();
+    const foreground = AppState.addEventListener("change", state => {
+      if (state === "active") void register();
+    });
+    const stop = listenForAssignments(() => {
+      if (session && active) void refresh(session);
+    });
+    return () => {
+      active = false;
+      foreground.remove();
+      stop();
+    };
+  }, [userId, role]);
+
+  async function leaveAccount() {
+    await unregisterPushDevice().catch(() => {});
+    await signOut();
+  }
 
   async function refresh(current: Session) {
     setError(null);
@@ -110,7 +149,7 @@ function AppContent() {
             ? "This account has more than one PMR organization. An administrator must resolve it."
             : "This account is not provisioned for PMR. Ask an administrator to grant access."}
         </Text>
-        <Text style={styles.link} onPress={() => signOut()}>
+        <Text style={styles.link} onPress={() => void leaveAccount()}>
           Sign out
         </Text>
       </Centered>
@@ -143,6 +182,8 @@ function AppContent() {
       {route.name === "profile" ? <ProfileScreen email={email} onBack={() => setRoute({name:"orders"})} /> : null}
       {route.name === "admin" && membership.member.role === "admin" ? <AdminScreen onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
       {route.name === "orders" ? (
+        <>
+        {pushError ? <Text accessibilityLiveRegion="polite" style={styles.body}>{pushError}</Text> : null}
         <OrdersScreen
           email={email}
           onProfile={() => setRoute({name:"profile"})}
@@ -150,9 +191,10 @@ function AppContent() {
           error={error}
           onOpen={(order) => { void showOrder(order); }}
           onRefresh={() => refresh(session)}
-          onSignOut={() => signOut()}
+          onSignOut={() => leaveAccount()}
           onAdmin={membership.member.role === "admin" ? () => setRoute({ name: "admin" }) : undefined}
         />
+        </>
       ) : null}
       {route.name === "order" && manager && !remoteTest ? <ReviewScreen onAdminTest={(testOrder) => setRoute({ name: "order", order: testOrder })} order={route.order} role={membership.member.role} onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
       {route.name === "order" && (!manager || remoteTest) ? (

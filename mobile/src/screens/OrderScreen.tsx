@@ -7,7 +7,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { groupPhotoState } from "../groupPhotoState";
+import { groupPhotoState, isGroupClosed } from "../groupPhotoState";
+import { requiredGroupPhotos } from "../../../shared/checklists";
 import { File, Paths } from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -190,7 +191,15 @@ export function OrderScreen({
       }),
     [order.id, order.assignee],
   );
-  const complete = records?.groups.length ?? 0;
+  const closedGroups = new Set(groups.filter((group) => isGroupClosed(
+    records?.groups.find((result) => result.group_id === group.id)?.status,
+    requiredGroupPhotos(group),
+    groupPhotoState(group.id, uploads, records?.evidence ?? []),
+  )).map((group) => group.id));
+  const complete = closedGroups.size;
+  useEffect(() => {
+    if (open && closedGroups.has(open)) setOpen(null);
+  }, [records, uploads]);
   return (
     <ScrollView
       style={s.root}
@@ -282,6 +291,8 @@ export function OrderScreen({
             ) ?? [],
           isOpen = open === g.id;
         const photo = groupPhotoState(g.id, uploads, records?.evidence ?? []);
+        const closed = closedGroups.has(g.id);
+        const minimum = requiredGroupPhotos(g);
         const resultTone =
           saved?.status === "Pass"
             ? { backgroundColor: "#EFFAF2", borderColor: "#159257" }
@@ -315,8 +326,9 @@ export function OrderScreen({
                     ? `${t("photoTaken")} · ${photo.count} · ${photo.uploaded ? t("photoUploaded") : photo.uploading ? t("uploading") : photo.failed ? t("uploadFailed") : t("submitPhoto")}`
                     : t("noPhoto")}
                 </Text>
+                <Text style={s.muted}>{t("uploadedPhotos")} · {photo.usableUploaded}/{minimum}</Text>
                 <Text style={s.muted}>
-                  {t("status")}: {saved ? t(saved.status) : t("pending")}
+                  {t("status")}: {saved ? t(saved.status) : t("pending")} {closed ? "· " + t("groupClosed") : ""}
                 </Text>
               </View>
               <Ionicons
@@ -329,7 +341,7 @@ export function OrderScreen({
               <View style={{ gap: 14 }}>
                 <Button
                   icon="camera-outline"
-                  label={photo.taken ? t("recapture") : t("capture")}
+                  label={photo.taken && (photo.requiresRetake || photo.retakeRequired) ? t("recapture") : t("capture")}
                   disabled={busy || !editable || !ready}
                   onPress={() => onCapture(g)}
                 />
@@ -537,7 +549,7 @@ export function OrderScreen({
       {order.status === "In progress" && !order.inventory?.admin_test ? (
         <Button
           label={t("submit")}
-          disabled={busy}
+          disabled={busy || complete !== groups.length}
           onPress={() =>
             void run(async () => {
               await flushEvidence(order.assignee);

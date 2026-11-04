@@ -109,6 +109,8 @@ export const catalogs = {
   "submitPhoto": "Submit",
   "retryPhoto": "Retry upload",
   "photoUploaded": "Uploaded",
+  "groupClosed": "Closed",
+  "uploadedPhotos": "Uploaded photos",
   "uploadPending": "Upload pending",
   "uploadFailed": "Upload needs attention",
   "uploading": "Uploading…"
@@ -219,6 +221,8 @@ export const catalogs = {
   "submitPhoto": "फ़ोटो भेजें",
   "retryPhoto": "अपलोड फिर करें",
   "photoUploaded": "अपलोड हो गई",
+  "groupClosed": "बंद",
+  "uploadedPhotos": "अपलोड की गई फ़ोटो",
   "uploadPending": "अपलोड लंबित",
   "uploadFailed": "अपलोड पर ध्यान दें",
   "uploading": "अपलोड हो रही है…"
@@ -329,6 +333,8 @@ export const catalogs = {
   "submitPhoto": "تصویر بھیجیں",
   "retryPhoto": "اپ لوڈ دوبارہ کریں",
   "photoUploaded": "اپ لوڈ ہو گئی",
+  "groupClosed": "بند",
+  "uploadedPhotos": "اپ لوڈ شدہ تصاویر",
   "uploadPending": "اپ لوڈ باقی ہے",
   "uploadFailed": "اپ لوڈ میں مسئلہ ہے",
   "uploading": "اپ لوڈ ہو رہی ہے…"
@@ -439,6 +445,8 @@ export const catalogs = {
   "submitPhoto": "إرسال الصورة",
   "retryPhoto": "إعادة رفع الصورة",
   "photoUploaded": "تم الرفع",
+  "groupClosed": "مغلق",
+  "uploadedPhotos": "الصور المرفوعة",
   "uploadPending": "بانتظار الرفع",
   "uploadFailed": "توجد مشكلة في الرفع",
   "uploading": "جارٍ الرفع…"

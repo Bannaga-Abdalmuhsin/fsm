@@ -87,3 +87,16 @@ New server derivatives retain the displayed photo aspect ratio and use a bottom-
 ### Smooth timestamp and iOS orientation (0.3.6)
 
 Capture now retains native EXIF orientation with processing enabled. SDK 58 iOS omits orientation metadata in its exif=false encoding path; retaining it lets the server normalize the original display orientation exactly once. Canonical stamps use bundled licensed outline glyphs with subpixel antialiasing, proportional sizing, a transparent bottom-right block and a subtle shadow. Long identifiers are ellipsized visually while full identifiers remain in authoritative records and exports. No runtime font downloads or third-party photo transmission is introduced. The original file remains unchanged. Previously registered evidence is not rewritten.
+
+### Group photo minimums and assignment notifications
+
+Each ODU or Shelter photo group defaults to half its ETL count rounded up. A group with five ETLs requires three uploads for Pass or Fail. A frozen checklist can override the minimum with a positive integer `required_photos`. The field screen counts uploaded evidence and collapses a saved group when it reaches its minimum and has no pending upload or retake. Not applicable and Not tested retain their existing photo exceptions. Group closure is a field progress indicator. The existing review workflow determines approval.
+
+New and reassigned work orders queue generic notifications for the technician assigned to the order. Device registration requires an active technician membership and the dispatcher rechecks the assignment, organisation and region before sending. The notification includes no work order number or site details. Expo routes Android notifications via FCM v1 and iOS via APNs.
+
+To enable push on a release:
+
+1. Register Android package `com.businessmagnificence.fsm` in the intended Firebase project. Add its Android configuration as the EAS file variable `GOOGLE_SERVICES_JSON`. Upload the FCM v1 service account credential through EAS credentials. Configure the APNs push key for the iOS bundle in EAS.
+2. Apply both PMR migrations and deploy `assignment-push`. Set `PMR_EXPO_PUSH_ACCESS_TOKEN` in the Edge Function secrets and enable Expo push access-token security. Set a separate random `PMR_PUSH_DISPATCH_SECRET`.
+3. Set up a one-minute authenticated POST schedule to the Edge Function. Pass the dispatch secret as `x-pmr-dispatch-secret` from Vault and a valid gateway JWT in `Authorization` if gateway JWT verification is enabled. The dispatcher records Expo ticket acceptance. Verify actual delivery on a signed-in technician device.
+4. Set `EXPO_PUBLIC_PMR_PUSH_ENABLED=true` on the target EAS build environment and create new binaries. Install and allow notifications before assigning a test WO. Foreground receipt or opening the notification refreshes the work order list.

@@ -5,7 +5,7 @@ export type Etl = {
   source: string;
   requiresClarification: boolean;
 };
-export type EvidenceGroup = { id: string; title: string; etls: Etl[] };
+export type EvidenceGroup = { id: string; title: string; etls: Etl[]; required_photos?: number };
 export const checklistVersion = 1;
 export const checklists: Record<"ODU" | "SHELTER", EvidenceGroup[]> = {
   ODU: [
@@ -1909,3 +1909,12 @@ export const checklists: Record<"ODU" | "SHELTER", EvidenceGroup[]> = {
     },
   ],
 };
+
+/** A frozen checklist may specify a group-specific minimum. Older WOs use half
+ * the ETL count rounded up, so a five-ETL group requires three photos. */
+export function requiredGroupPhotos(group: EvidenceGroup): number {
+  const minimum = group.required_photos;
+  return typeof minimum === "number" && Number.isSafeInteger(minimum) && minimum > 0
+    ? minimum
+    : Math.max(1, Math.ceil(group.etls.length / 2));
+}

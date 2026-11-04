@@ -16,7 +16,7 @@ beforeAll(async()=>{
  db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));await db.exec('alter table storage.buckets add column file_size_limit bigint, add column allowed_mime_types text[]');
  await db.exec(`create table public.pmr_sites(site_id text primary key,location text,latitude float8,longitude float8,site_status text,site_type text,vendor text,region text,district text,source_id text,source_row int,refreshed_at timestamptz,validation_errors jsonb);
  create table public.pmr_schedule_rows(source_id text,sync_id uuid,source_tab text,source_row int,site_id text,region text,district text,scheduled_date date,tcn_number text,tcn_time text,team_name text,supervisor_name text,raw jsonb,state text default 'draft',validation_errors jsonb default '[]',order_id text,synced_at timestamptz default now(),site_reference jsonb,primary key(source_id,sync_id));`);
- for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql','./migrations/20261103083112_office_workflow_fsm_handoff.sql','./migrations/20261103095804_national_work_order_catalogue.sql'])await db.exec(sql(file).replace("user_id uuid primary key references auth.users(id)","user_id text primary key references auth.users(id)"));
+ for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql','./migrations/20261103083112_office_workflow_fsm_handoff.sql','./migrations/20261103095804_national_work_order_catalogue.sql','./migrations/20261104120000_pmr_group_photo_minimums.sql','./migrations/20261104120100_pmr_assignment_push.sql'])await db.exec(sql(file).replaceAll("user_id uuid","user_id text"));
  await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('a','admin@test','org','admin','["CR"]','[]'),('t','tech@test','org','technician','["CR"]','[]'),('l','lead@test','org','team_leader','["CR"]','["Team"]'),('r','rm@test','org','regional_manager','["CR"]','[]');`);
  await db.query(`insert into public.pmr_orders(id,owner_email,org_id,site_id,site_type,region,team,assignee,wo,tcn,month,latitude,longitude,scheduled_start,scheduled_end,tcn_start,tcn_end,inventory,checklist,policy,created_at,updated_at) values('wo','admin@test','org','SITE','ODU','CR','Team','tech@test','WO1','TCN1','2026-11',24.7,46.7,$1,$2,$1,$2,'{}',$3,$4,$1,$1)`,[start,end,JSON.stringify(checklists.ODU),JSON.stringify(defaultPolicy)]);
 },60000);
@@ -124,13 +124,19 @@ await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.string
   await as('other@test');expect((await db.query("select * from public.pmr_profiles")).rows).toHaveLength(0);
   await expect(db.exec("select public.pmr_save_profile('Other','','en',null)")).rejects.toThrow(/Provisioned/);
  });
- it('requires photos for PASS/FAIL but accepts a pending quality check for office review',async()=>{
+ it('requires three uploaded photos for five ETLs but accepts pending quality checks for office review',async()=>{
   await admin();
-  const group={...checklists.ODU[0],etls:[checklists.ODU[0].etls[0]]};
+  const group={...checklists.ODU[0],etls:checklists.ODU.flatMap(group => group.etls).slice(0,5)};
   await db.query("insert into public.pmr_orders select (jsonb_populate_record(null::public.pmr_orders,to_jsonb(o)||$1::jsonb)).* from public.pmr_orders o where id='wo'",[JSON.stringify({id:'simple-wo',wo:'simpleWO',checklist:[group],status:'In progress',version:3})]);
   await as('tech@test');await db.exec("select public.pmr_save_group('simple-wo','O01','Fail','','{}',0)");
-  await expect(db.exec("select public.pmr_submit_order('simple-wo',3)")).rejects.toThrow(/Upload a photo/);
+  await expect(db.exec("select public.pmr_submit_order('simple-wo',3)")).rejects.toThrow(/required number of photos/);
   await admin();await db.exec("insert into public.pmr_evidence select (jsonb_populate_record(null::public.pmr_evidence,to_jsonb(e)||'{\"id\":\"pending-photo\",\"capture_id\":\"pending-photo\",\"order_id\":\"simple-wo\",\"state\":\"Pending analysis\",\"analysis\":null,\"quality\":{\"score\":null,\"provisional\":true}}'::jsonb)).* from public.pmr_evidence e where id='photo'");
+  await as('tech@test');
+  await expect(db.exec("select public.pmr_submit_order('simple-wo',3)")).rejects.toThrow(/required number of photos/);
+  await admin();
+  for (const id of ['second-photo','third-photo']) {
+    await db.query("insert into public.pmr_evidence select (jsonb_populate_record(null::public.pmr_evidence,to_jsonb(e)||$1::jsonb)).* from public.pmr_evidence e where id='pending-photo'",[JSON.stringify({id,capture_id:id,sha:id})]);
+  }
   await as('tech@test');await db.exec("select public.pmr_submit_order('simple-wo',3)");
   await as('lead@test');await expect(db.exec("select public.pmr_review_photo('pending-photo',3,'approved','')")).rejects.toThrow();
  });
@@ -173,4 +179,23 @@ await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.string
   await db.query('select public.pmr_save_quality_policy($1)',[JSON.stringify(defaultPolicy)]);
   await as('tech@test');await expect(db.query('select public.pmr_save_quality_policy($1)',[JSON.stringify(defaultPolicy)])).rejects.toThrow(/Admin/);
  });
+});
+
+it('queues a newly assigned WO for the assigned technician only and leases once', async () => {
+  await as('tech@test');
+  await db.exec("select public.pmr_register_push_device('ExpoPushToken[technician-demo]')");
+  await expect(db.exec("select * from public.pmr_push_devices")).rejects.toThrow(/permission denied/);
+  await expect(db.exec("select public.pmr_claim_assignment_push()")).rejects.toThrow(/permission denied/);
+  await as('lead@test');
+  await expect(db.exec("select public.pmr_register_push_device('ExpoPushToken[lead-demo]')")).rejects.toThrow(/Technician membership/);
+  await admin();
+  await db.query("insert into public.pmr_orders select (jsonb_populate_record(null::public.pmr_orders,to_jsonb(o)||$1::jsonb)).* from public.pmr_orders o where id='wo'",[JSON.stringify({id:'push-wo',wo:'pushWO',status:'Assigned',version:1})]);
+  await db.exec("update public.pmr_orders set status='Assigned' where id='push-wo'");
+  await db.exec("set role service_role");
+  expect((await db.query("select token, attempts from public.pmr_claim_assignment_push()")).rows).toEqual([{token:'ExpoPushToken[technician-demo]',attempts:1}]);
+  expect((await db.query("select * from public.pmr_claim_assignment_push()")).rows).toHaveLength(0);
+  await as('tech@test');
+  await db.exec("select public.pmr_unregister_push_device('ExpoPushToken[technician-demo]')");
+  await admin();
+  expect((await db.query("select * from public.pmr_assignment_push where order_id='push-wo'")).rows).toHaveLength(0);
 });

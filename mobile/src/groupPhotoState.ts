@@ -8,5 +8,17 @@ export function groupPhotoState(groupId:string,local:LocalEvidence[],remote:Evid
  const pending=local.filter(e=>e.groupId===groupId&&!serverIds.has(e.evidenceId));
  const count=new Set([...stored.map(e=>e.id),...local.filter(e=>e.groupId===groupId).map(e=>e.evidenceId)]).size;
  const requiresRetake=pending.length>0&&pending.every(e=>e.lastError?.startsWith("Retake required")||e.lastError?.startsWith("Local photo changed"));
- return {requiresRetake,count,taken:count>0,pending,uploading:pending.some(e=>e.uploadState==='uploading'),failed:pending.some(e=>['retry','blocked'].includes(e.uploadState)),uploaded:stored.length>0&&pending.length===0};
+ const usableUploaded = stored.filter(e => ["Accepted", "Supervisor review", "Pending analysis"].includes(e.state)).length;
+ const retakeRequired = stored.some(e => e.state === "Retake required");
+ return {usableUploaded,retakeRequired,requiresRetake,count,taken:count>0,pending,uploading:pending.some(e=>e.uploadState==='uploading'),failed:pending.some(e=>['retry','blocked'].includes(e.uploadState)),uploaded:stored.length>0&&pending.length===0};
+}
+
+export function isGroupClosed(
+  status: string | undefined,
+  minimum: number,
+  photos: ReturnType<typeof groupPhotoState>,
+): boolean {
+  if (!status || photos.pending.length || photos.retakeRequired) return false;
+  if (status === "Pass" || status === "Fail") return photos.usableUploaded >= minimum;
+  return status === "Not applicable" || status === "Not tested";
 }
