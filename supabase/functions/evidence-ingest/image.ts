@@ -1,6 +1,6 @@
 import jpeg from "npm:jpeg-js@0.4.4";
 import { PNG } from "npm:pngjs@7.0.0";
-import * as exifr from "npm:exifr@7.1.3";
+import exifr from "npm:exifr@7.1.3";
 import { Buffer } from "node:buffer";
 import { IngestError, type Mime } from "./core.ts";
 import {stampFont} from "./stamp-font.ts";
