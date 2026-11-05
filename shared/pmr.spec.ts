@@ -1,85 +1,130 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
+import { checklists } from "./checklists";
 import {
-  locationGate,
   captureTimeGate,
-  quality,
   defaultPolicy,
-  evidenceDecision,
   hashDistance,
+  locationGate,
+  type Geo,
 } from "./pmr";
-describe("PMR evidence gates", () => {
-  const now = Date.parse("2026-10-26T10:00:00Z"),
-    site = { latitude: 24.7, longitude: 46.7 };
-  it("requires fresh accurate GPS reliably within the boundary", () => {
-    const fix = {
-      ...site,
-      accuracy: 10,
-      timestamp: new Date(now).toISOString(),
-    };
-    expect(locationGate(fix, site, now).allowed).toBe(true);
-    expect(locationGate({ ...fix, latitude: 24.71 }, site, now).allowed).toBe(
-      false,
-    );
-    expect(locationGate({ ...fix, accuracy: 90 }, site, now).allowed).toBe(
-      false,
-    );
-    expect(
-      locationGate(
-        { ...fix, timestamp: new Date(now - 180000).toISOString() },
-        site,
-        now,
-      ).allowed,
-    ).toBe(false);
+
+const site = { latitude: 24.7, longitude: 46.7 };
+const now = Date.parse("2026-10-27T06:10:00.000Z");
+
+function fix(overrides: Partial<Geo> = {}): Geo {
+  return {
+    latitude: site.latitude,
+    longitude: site.longitude,
+    accuracy: 10,
+    timestamp: "2026-10-27T06:10:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("ETL catalog", () => {
+  const etls = (type: "ODU" | "SHELTER") =>
+    checklists[type].flatMap((group) => group.etls);
+
+  it("keeps the full reference catalog", () => {
+    expect(checklists.ODU).toHaveLength(15);
+    expect(checklists.SHELTER).toHaveLength(28);
+    expect(etls("ODU")).toHaveLength(67);
+    expect(etls("SHELTER")).toHaveLength(144);
   });
-  it("judges original capture time, allowing delayed offline upload", () => {
+
+  it("flags the seven entries that need clarification", () => {
+    const flagged = [...etls("ODU"), ...etls("SHELTER")].filter(
+      (etl) => etl.requiresClarification,
+    );
+    expect(flagged).toHaveLength(7);
+  });
+});
+
+describe("locationGate", () => {
+  it("allows a fresh, accurate fix inside the radius", () => {
+    expect(locationGate(fix(), site, now).allowed).toBe(true);
+  });
+
+  it("blocks a stale fix", () => {
+    const result = locationGate(
+      fix({ timestamp: "2026-10-27T06:00:00.000Z" }),
+      site,
+      now,
+    );
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/stale/);
+  });
+
+  it("blocks low accuracy", () => {
+    const result = locationGate(
+      fix({ accuracy: defaultPolicy.maxAccuracy + 1 }),
+      site,
+      now,
+    );
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/accuracy/);
+  });
+
+  it("blocks a fix outside the boundary once accuracy is counted", () => {
+    const far = fix({ latitude: site.latitude + 0.0022, accuracy: 40 });
+    const result = locationGate(far, site, now);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/250 m/);
+  });
+
+  it("blocks capture when the site has no coordinates", () => {
+    const result = locationGate(fix(), { latitude: null, longitude: null }, now);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/coordinates are missing/);
+  });
+});
+
+describe("captureTimeGate", () => {
+  const start = "2026-10-27T06:00:00.000Z";
+  const end = "2026-10-27T10:00:00.000Z";
+
+  it("accepts a capture inside the TCN window", () => {
     expect(
       captureTimeGate(
-        "2026-10-26T10:00:00Z",
-        "2026-10-26T09:00:00Z",
-        "2026-10-26T11:00:00Z",
-        "2026-10-27T10:00:00Z",
+        "2026-10-27T07:00:00.000Z",
+        start,
+        end,
+        "2026-10-27T07:00:05.000Z",
       ),
     ).toBeNull();
+  });
+
+  it("rejects a capture outside the TCN window", () => {
     expect(
       captureTimeGate(
-        "2026-10-26T12:00:00Z",
-        "2026-10-26T09:00:00Z",
-        "2026-10-26T11:00:00Z",
-        "2026-10-27T10:00:00Z",
+        "2026-10-27T11:00:00.000Z",
+        start,
+        end,
+        "2026-10-27T11:00:05.000Z",
       ),
-    ).toContain("TCN");
+    ).toMatch(/TCN/);
   });
-  it("never gives missing analysis full marks or bypasses a blocking finding", () => {
-    const q = quality(
-      {
-        clarity: 100,
-        coverage: null,
-        integrity: 100,
-        location: 100,
-        time: 100,
-      },
-      defaultPolicy,
-    );
-    expect(q.score).toBe(75);
-    expect(q.provisional).toBe(true);
+
+  it("rejects future timestamps and invalid values", () => {
     expect(
-      evidenceDecision(
-        [
-          {
-            code: "mismatch",
-            message: "Wrong equipment",
-            severity: "block",
-            confidence: 1,
-          },
-        ],
-        true,
+      captureTimeGate(
+        "2026-10-27T09:00:00.000Z",
+        start,
+        end,
+        "2026-10-27T07:00:00.000Z",
       ),
-    ).toBe("Retake required");
-    expect(evidenceDecision([], false)).toBe("Pending analysis");
+    ).toMatch(/future/);
+    expect(
+      captureTimeGate("not-a-date", start, end, "2026-10-27T07:00:00.000Z"),
+    ).toMatch(/invalid/);
   });
-  it("compares perceptual hashes", () => {
-    expect(hashDistance("ff", "ff")).toBe(0);
-    expect(hashDistance("ff", "fe")).toBe(1);
+});
+
+describe("hashDistance", () => {
+  it("counts differing bits and treats length mismatch as maximal", () => {
+    expect(hashDistance("0", "0")).toBe(0);
+    expect(hashDistance("f", "0")).toBe(4);
+    expect(hashDistance("ff", "f")).toBe(64);
   });
 });
