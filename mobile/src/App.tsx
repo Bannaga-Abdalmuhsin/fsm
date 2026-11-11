@@ -197,9 +197,10 @@ function AppContent() {
         </>
       ) : null}
       {route.name === "order" && manager && !remoteTest ? <ReviewScreen onAdminTest={(testOrder) => setRoute({ name: "order", order: testOrder })} order={route.order} role={membership.member.role} onBack={() => { setRoute({ name: "orders" }); void refresh(session); }} /> : null}
-      {route.name === "order" && (!manager || remoteTest) ? (
+      {(route.name === "order" || route.name === "capture") && (!manager || remoteTest) ? (
         <OrderScreen
           order={route.order}
+          active={route.name === "order"}
           onBack={() => setRoute({ name: "orders" })}
           onCapture={(group) => setRoute({ name: "capture", order: route.order, group })}
           onGallery={(group, galleryApproval) => setRoute({ name: "capture", order: route.order, group, galleryApproval })}
@@ -210,6 +211,7 @@ function AppContent() {
         />
       ) : null}
       {route.name === "capture" ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}>
         <CaptureScreen
           order={route.order}
           group={route.group}
@@ -218,6 +220,7 @@ function AppContent() {
           team={team}
           onDone={() => setRoute({ name: "order", order: route.order })}
         />
+        </View>
       ) : null}
     </View>
   );

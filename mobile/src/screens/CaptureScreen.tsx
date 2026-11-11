@@ -102,7 +102,7 @@ export function CaptureScreen({
     }
   }
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -180,7 +180,7 @@ export function CaptureScreen({
     if ((!cameraRef.current && !galleryApproval) || busy) return;
     setBusy(true);
     setError(null);
-    setSaved(null);
+
     try {
       if (tcnWindowMissing(order) || !order.tcn_start || !order.tcn_end) {
         throw new Error("TCN setup is incomplete. Capture is blocked.");
@@ -387,9 +387,9 @@ export function CaptureScreen({
       await new File(dir, "metadata.json").write(
         JSON.stringify(metadata, null, 2),
       );
-      await replaceMissingCaptures(email, order.id, group.id, id);
+      await replaceMissingCaptures(email, order.id, group.id, id, metadata.linkedEtls);
       setStamp(null);
-      setSaved(t("photoQueued"));
+      onDone();
 
     } catch (err) {
       setStamp(null);
@@ -445,7 +445,7 @@ export function CaptureScreen({
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {saved ? <Text style={styles.message}>{saved}</Text> : null}
+
 
       <View style={styles.footer}>
         <Pressable

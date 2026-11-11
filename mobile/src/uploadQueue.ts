@@ -90,9 +90,10 @@ async function save(row: LocalEvidence) {
   for (const listener of listeners) listener(row.technician);
 }
 // Only the explicit group submission releases newly captured local drafts.
-export async function submitGroupEvidence(email: string, orderId: string, groupId: string) {
+export async function submitGroupEvidence(email: string, orderId: string, groupId: string, linkedEtls?: number[]) {
   for (const row of await queuedEvidence(email)) {
-    if (!row.supersededBy && row.orderId === orderId && row.groupId === groupId && row.uploadState === "draft")
+    if (!row.supersededBy && row.orderId === orderId && row.groupId === groupId && row.uploadState === "draft" &&
+      (!linkedEtls || linkedEtls.every((number) => row.linkedEtls.includes(number))))
       await save({...row, uploadState: "queued", nextAttemptAt: 0});
   }
   await retryEvidence(email, groupId, orderId);
@@ -248,12 +249,14 @@ export async function replaceMissingCaptures(
   orderId: string,
   groupId: string,
   replacementId: string,
+  linkedEtls?: number[],
 ) {
   for (const row of await queuedEvidence(email)) {
     if (
       row.orderId !== orderId ||
       row.groupId !== groupId ||
       row.evidenceId === replacementId ||
+      (linkedEtls && !row.linkedEtls.every((number) => linkedEtls.includes(number))) ||
       row.uploadState === "uploaded" ||
       row.supersededBy
     )

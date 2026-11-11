@@ -20,6 +20,7 @@ import {
   getOrder,
   submitOrder,
   type EtlStatus,
+  type GroupSubmission,
   type Order,
 } from "../api";
 import {
@@ -41,11 +42,39 @@ type Draft = {
   checks: Record<string, EtlStatus>;
   generatorState?: string;
   remarks: string;
+  sectionRemarks?: Record<string, string>;
   values: Record<string, string>;
 };
 const empty = (): Draft => ({ checks: {}, remarks: "", values: {} });
+function completeGroupStatus(group: EvidenceGroup, saved?: GroupSubmission) {
+  if (saved?.field_checks && group.etls.some((check) => !saved.field_checks?.[check.code])) return undefined;
+  return saved?.status;
+}
+function checksForSection(group: EvidenceGroup, section: string) {
+  return group.etls.filter((check) => checkInEquipmentSection(group.id, check.number, section));
+}
+
+function sectionPhotoState(group: EvidenceGroup, section: string, uploads: LocalEvidence[], evidence: Awaited<ReturnType<typeof orderRecords>>["evidence"]) {
+  const numbers = checksForSection(group, section).map((check) => check.number);
+  return groupPhotoState(group.id,
+    uploads.filter((photo) => numbers.every((number) => photo.linkedEtls.includes(number))),
+    evidence.filter((photo) => numbers.every((number) => photo.linked_etls.includes(number))),
+  );
+}
+
+function sectionComplete(group: EvidenceGroup, section: string, saved: GroupSubmission | undefined,
+  uploads: LocalEvidence[], evidence: Awaited<ReturnType<typeof orderRecords>>["evidence"]) {
+  if (!saved?.field_checks) {
+    return isGroupClosed(saved?.status, requiredGroupPhotos(group), sectionPhotoState(group, section, uploads, evidence));
+  }
+  const statuses = checksForSection(group, section).map((check) => saved.field_checks?.[check.code]);
+  if (!statuses.length || statuses.some((status) => !status)) return false;
+  const status = statuses.some((value) => value === "Pass" || value === "Fail") ? "Pass" : "Not tested";
+  return isGroupClosed(status, requiredGroupPhotos(group), sectionPhotoState(group, section, uploads, evidence));
+}
 type Props = {
   order: Order;
+  active: boolean;
   onBack: () => void;
   onCapture: (g: EvidenceGroup) => void;
   onGallery: (g: EvidenceGroup, a: string) => void;
@@ -53,6 +82,7 @@ type Props = {
 };
 export function OrderScreen({
   order,
+  active,
   onBack,
   onCapture,
   onGallery,
@@ -106,6 +136,13 @@ export function OrderScreen({
             checks: g.field_checks ?? {},
             generatorState: g.generator_state ?? undefined,
             remarks: g.remarks,
+            sectionRemarks: Object.fromEntries(equipmentSections.flatMap(([section, ids]) => {
+              const group = groups.find((item) => item.id === g.group_id);
+              if (!group || !ids.split(" ").includes(baseGroup(group.id))) return [];
+              const codes = checksForSection(group, section).map((check) => check.code);
+              const result = r.results.find((item) => item.instance === group.id && codes.includes(item.etl_code));
+              return result ? [[section, result.remarks]] : [];
+            })),
             values: Object.fromEntries(
               Object.entries(g.measurements).map(([k, v]) => [k, String(v)]),
             ),
@@ -156,9 +193,10 @@ export function OrderScreen({
     await startWork(current);
     onOrderChanged(await getOrder(current.id));
   }
-  async function save(g: EvidenceGroup) {
+  async function save(g: EvidenceGroup, section: string) {
     const d = drafts[g.id] ?? empty();
-    const checks = d.checks ?? {};
+    const visibleChecks = checksForSection(g, section);
+    const checks = Object.fromEntries(visibleChecks.map((check) => [check.code, d.checks?.[check.code]]));
     const values: Record<string, number> = {};
     const assessed = Object.values(checks).some((status) => status === "Pass" || status === "Fail");
     if (assessed) {
@@ -169,15 +207,18 @@ export function OrderScreen({
         values[key] = n;
       }
     }
-    await saveEquipmentGroup(order.id, g.id, checks, d.remarks, values, d.generatorState ?? null,
+    await saveEquipmentGroup(order.id, g.id, checks, d.sectionRemarks?.[section] ?? d.remarks, values, d.generatorState ?? null,
       records?.groups.find((r) => r.group_id === g.id)?.revision ?? 0);
-    returnToSection.current = category;
+    returnToSection.current = section;
     setOpen(null);
     setCategory(null);
     setMessage(t("saved"));
     await refresh();
-    void submitGroupEvidence(order.assignee, order.id, g.id).then(refresh).catch(e => setMessage(e.message));
+    void submitGroupEvidence(order.assignee, order.id, g.id, visibleChecks.map((check) => check.number)).then(refresh).catch(e => setMessage(e.message));
   }
+  useEffect(() => {
+    if (active) void refresh().catch((error: Error) => setMessage(error.message));
+  }, [active, order.id]);
   // Refresh on persisted queue transitions, including completion of background uploads.
   useEffect(
     () =>
@@ -188,14 +229,11 @@ export function OrderScreen({
     [order.id, order.assignee],
   );
   const closedGroups = new Set(groups.filter((group) => isGroupClosed(
-    records?.groups.find((result) => result.group_id === group.id)?.status,
+    completeGroupStatus(group, records?.groups.find((result) => result.group_id === group.id)),
     requiredGroupPhotos(group),
     groupPhotoState(group.id, uploads, records?.evidence ?? []),
   )).map((group) => group.id));
   const complete = closedGroups.size;
-  useEffect(() => {
-    if (open && closedGroups.has(open)) setOpen(null);
-  }, [records, uploads]);
   useEffect(() => {
     const section = returnToSection.current;
     if (category !== null || section === null) return;
@@ -299,7 +337,9 @@ export function OrderScreen({
             <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
               style={[s.card, s.row]} onPress={() => setCategory(expanded ? null : name)}>
               <Text style={[s.title, { flex: 1 }]}>{name}</Text>
-              <Text style={s.muted}>{sectionGroups.filter((group) => closedGroups.has(group.id)).length}/{sectionGroups.length}</Text>
+              <Text style={s.muted}>{sectionGroups.filter((group) =>
+                sectionComplete(group, name, records?.groups.find((result) => result.group_id === group.id),
+                  uploads, records?.evidence ?? [])).length}/{sectionGroups.length}</Text>
               <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
             </Pressable>
             {expanded && sectionGroups.map((g) => {
@@ -310,23 +350,35 @@ export function OrderScreen({
               (e) => e.group_id === g.id && e.state !== "Superseded",
             ) ?? [],
           isOpen = open === g.id;
-        const photo = groupPhotoState(g.id, uploads, records?.evidence ?? []);
-        const closed = closedGroups.has(g.id);
+        const photo = sectionPhotoState(g, name, uploads, records?.evidence ?? []);
+        const sectionGroup = { ...g, etls: checksForSection(g, name) };
+        const sectionNumbers = sectionGroup.etls.map((check) => check.number);
+        const inSection = (linked: number[]) => sectionNumbers.every((number) => linked.includes(number));
+        const sectionPhotos = [
+          ...photos.filter((e) => inSection(e.linked_etls)).map((e) => ({ id: e.id, state: e.state })),
+          ...uploads.filter((e) => e.groupId === g.id && !e.supersededBy && inSection(e.linkedEtls) && !photos.some((p) => p.id === e.evidenceId))
+            .map((e) => ({ id: e.evidenceId, state: e.uploadState === "blocked" ? "Retake required" : e.uploadState })),
+        ];
+        const closed = sectionComplete(g, name, saved, uploads, records?.evidence ?? []);
         const minimum = requiredGroupPhotos(g);
+        const sectionStatuses = sectionGroup.etls.map((check) => saved?.field_checks?.[check.code]);
+        const sectionStatus = !saved?.field_checks ? saved?.status
+          : sectionStatuses.some((status) => !status) ? undefined
+          : (["Fail", "Pass", "Not tested", "Not applicable"] as const).find((status) => sectionStatuses.includes(status));
         const resultTone =
-          saved?.status === "Pass"
+          sectionStatus === "Pass"
             ? { backgroundColor: "#EFFAF2", borderColor: "#159257" }
-            : saved?.status === "Fail"
+            : sectionStatus === "Fail"
               ? { backgroundColor: "#FFF1F1", borderColor: "#C43C43" }
-              : saved?.status === "Not tested"
+              : sectionStatus === "Not tested"
                 ? { backgroundColor: "#FFF8E8", borderColor: "#B77C18" }
-                : saved?.status === "Not applicable"
+                : sectionStatus === "Not applicable"
                   ? { backgroundColor: "#F0F2F5", borderColor: "#87929C" }
                   : undefined;
         return (
           <View
             key={g.id}
-            style={[s.card, resultTone, saved && { borderLeftWidth: 5 }]}
+            style={[s.card, resultTone, sectionStatus && { borderLeftWidth: 5 }]}
           >
             <Pressable
               onPress={() => setOpen(isOpen ? null : g.id)}
@@ -345,7 +397,7 @@ export function OrderScreen({
                 </Text>
                 <Text style={s.muted}>{t("uploadedPhotos")} · {photo.usableUploaded}/{minimum}</Text>
                 <Text style={s.muted}>
-                  {t("status")}: {saved ? t(saved.status) : t("pending")} {closed ? "· " + t("groupClosed") : ""}
+                  {t("status")}: {sectionStatus ? t(sectionStatus) : t("pending")} {closed ? "· " + t("groupClosed") : ""}
                 </Text>
               </View>
               <Ionicons
@@ -356,49 +408,23 @@ export function OrderScreen({
             </Pressable>
             {isOpen ? (
               <View style={{ gap: 14 }}>
-                <Button
-                  icon="camera-outline"
-                  label={photo.taken && (photo.requiresRetake || photo.retakeRequired) ? t("recapture") : t("capture")}
-                  disabled={busy || !editable || !ready}
-                  onPress={() => onCapture(g)}
-                />
-                {photo.taken ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={s.notice}>
-                      ✓ {t("photoTaken")} ·{" "}
-                      {photo.requiresRetake
-                        ? t("Retake required")
-                        : photo.uploaded
-                          ? t("photoUploaded")
-                          : photo.failed
-                            ? t("uploadFailed")
-                            : t("uploadPending")}
-                    </Text>
-                    {photo.failed && !photo.requiresRetake ? (
-                      <Button
-                        label={
-                          photo.uploading
-                            ? t("uploading")
-                            : photo.failed
-                              ? t("retryPhoto")
-                              : t("submitPhoto")
-                        }
-                        disabled={busy || photo.uploading}
-                        onPress={() =>
-                          void run(() => save(g))
-                        }
-                      />
-                    ) : null}
-                    {photo.failed ? (
-                      <Text style={s.error}>
-                        {photo.pending.find((e) => e.lastError)?.lastError}
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : (
-                  <Text style={s.muted}>{t("cameraHelp")}</Text>
-                )}
-                {photos.map((e) => (
+                <View style={{ gap: 8 }}>
+                  {Array.from({ length: Math.max(minimum, sectionPhotos.length) }, (_, index) => {
+                    const captured = sectionPhotos[index];
+                    const needsRetake = captured?.state === "Retake required";
+                    return (
+                      <Pressable key={index} accessibilityRole="button"
+                        accessibilityLabel={`Photo ${index + 1}: ${needsRetake ? t("recapture") : captured ? t("photoTaken") : t("capture")}`}
+                        disabled={busy || !editable || !ready || (!!captured && !needsRetake) || index > sectionPhotos.length}
+                        style={[s.status, captured && !needsRetake && { backgroundColor: "#DDF5E6", borderColor: "#159257" }]}
+                        onPress={() => onCapture(needsRetake && photos.some((e) => e.id === captured.id && e.linked_etls.length > sectionNumbers.length) ? g : sectionGroup)}>
+                        <Text style={s.label}>Photo {index + 1} · {needsRetake ? t("recapture") : captured ? t("photoTaken") : t("capture")}</Text>
+                      </Pressable>
+                    );
+                  })}
+                  {photo.failed ? <Text style={s.error}>{photo.pending.find((e) => e.lastError)?.lastError}</Text> : null}
+                </View>
+                {photos.filter((e) => inSection(e.linked_etls)).map((e) => (
                   <Text
                     key={e.id}
                     style={e.state === "Retake required" ? s.error : s.muted}
@@ -428,7 +454,7 @@ export function OrderScreen({
                       secondary
                       label={t("gallery")}
                       disabled={busy || !editable}
-                      onPress={() => onGallery(g, a.id)}
+                      onPress={() => onGallery(sectionGroup, a.id)}
                     />
                   ))}
                 {["O09", "S16"].includes(baseGroup(g.id)) && (
@@ -475,15 +501,12 @@ export function OrderScreen({
                   ))}
                 <TextInput editable={editable && !busy} accessibilityLabel={t("remarks")}
                   placeholder="Remarks (required for Issue or Not checked)"
-                  placeholderTextColor={colors.muted} value={d.remarks}
-                  onChangeText={(remarks) => patch(g.id, { remarks })}
+                  placeholderTextColor={colors.muted} value={d.sectionRemarks?.[name] ?? d.remarks}
+                  onChangeText={(remarks) => patch(g.id, { sectionRemarks: { ...d.sectionRemarks, [name]: remarks } })}
                   multiline maxLength={2000} style={[s.input, { minHeight: 72 }]} />
-                {g.etls.some((check) => !checkInEquipmentSection(g.id, check.number, name) && !d.checks?.[check.code]) && (
-                  <Text style={s.muted}>Complete the related checks in the other equipment section to save these shared photos.</Text>
-                )}
                 <Button label={t("submitGroup")}
-                  disabled={busy || !editable || g.etls.some((check) => !d.checks?.[check.code])}
-                  onPress={() => void run(() => save(g))} />
+                  disabled={busy || !editable || sectionGroup.etls.some((check) => !d.checks?.[check.code])}
+                  onPress={() => void run(() => save(g, name))} />
               </View>
             ) : null}
           </View>
@@ -501,11 +524,16 @@ export function OrderScreen({
               await retryEvidence(order.assignee, undefined, order.id);
               const { latestRecords, latestUploads } = await refresh();
               const readyToSubmit = groups.length > 0 && groups.every((group) => isGroupClosed(
-                latestRecords.groups.find((result) => result.group_id === group.id)?.status,
+                completeGroupStatus(group, latestRecords.groups.find((result) => result.group_id === group.id)),
                 requiredGroupPhotos(group),
                 groupPhotoState(group.id, latestUploads, latestRecords.evidence),
               ));
-              if (!readyToSubmit) throw new Error(t("submitIncomplete"));
+              const equipmentReady = equipmentSections.every(([name, ids]) => groups
+                .filter((group) => ids.split(" ").includes(baseGroup(group.id)) && checksForSection(group, name).length > 0)
+                .every((group) => sectionComplete(group, name,
+                  latestRecords.groups.find((result) => result.group_id === group.id),
+                  latestUploads, latestRecords.evidence)));
+              if (!readyToSubmit || !equipmentReady) throw new Error(t("submitIncomplete"));
               await submitOrder(await getOrder(order.id));
               const draft = new File(Paths.document, draftKey + ".json");
               if (draft.exists) draft.delete();
