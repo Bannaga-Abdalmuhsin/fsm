@@ -23,7 +23,6 @@ import {
   type Order,
 } from "../api";
 import {
-  flushEvidence,
   queuedEvidence,
   retryEvidence,
   submitGroupEvidence,
@@ -79,12 +78,11 @@ export function OrderScreen({
     !tcnWindowMissing(order) &&
     ["Checked in", "In progress"].includes(order.status);
   async function refresh() {
-    setRecords(await orderRecords(order.id));
-    setUploads(
-      (await queuedEvidence(order.assignee)).filter(
-        (u) => u.orderId === order.id,
-      ),
-    );
+    const latestRecords = await orderRecords(order.id);
+    const latestUploads = (await queuedEvidence(order.assignee)).filter((u) => u.orderId === order.id);
+    setRecords(latestRecords);
+    setUploads(latestUploads);
+    return { latestRecords, latestUploads };
   }
   useEffect(() => {
     let active = true;
@@ -476,37 +474,23 @@ export function OrderScreen({
           </View>
         );
       })}
-      <View style={s.row}>
-        <Button
-          secondary
-          label={t("refresh")}
-          disabled={busy}
-          onPress={() => void run(refresh)}
-        />
-        <Button
-          secondary
-          label={t("retry")}
-          disabled={busy}
-          onPress={() =>
-            void retryEvidence(order.assignee)
-              .then(refresh)
-              .catch((e) => setMessage(e.message))
-          }
-        />
-      </View>
-
       {order.status === "In progress" && !order.inventory?.admin_test ? (
         <Button
           label={t("submit")}
-          disabled={busy || complete !== groups.length}
+          disabled={busy || !ready}
           onPress={() =>
             void run(async () => {
-              await flushEvidence(order.assignee);
+              await retryEvidence(order.assignee, undefined, order.id);
+              const { latestRecords, latestUploads } = await refresh();
+              const readyToSubmit = groups.length > 0 && groups.every((group) => isGroupClosed(
+                latestRecords.groups.find((result) => result.group_id === group.id)?.status,
+                requiredGroupPhotos(group),
+                groupPhotoState(group.id, latestUploads, latestRecords.evidence),
+              ));
+              if (!readyToSubmit) throw new Error(t("submitIncomplete"));
               await submitOrder(await getOrder(order.id));
-              {
-                const f = new File(Paths.document, draftKey + ".json");
-                if (f.exists) f.delete();
-              }
+              const draft = new File(Paths.document, draftKey + ".json");
+              if (draft.exists) draft.delete();
               onOrderChanged(await getOrder(order.id));
             })
           }
