@@ -10,6 +10,7 @@ import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { LinksFunction } from "react-router";
 
 import { Layout as AppLayout } from "@/components/layout/Layout";
+import { AuthProvider } from "@/lib/auth";
 import { AppToolkitProvider } from "@/components/ui/toolkit-provider";
 import { useNavigationState } from "@/hooks/use-navigation-state";
 import { APP_NAME, APP_TITLE } from "@/lib/app-config";
@@ -35,7 +36,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+        />
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
@@ -78,9 +82,11 @@ export default function Root() {
     <AppToolkitProvider>
       <AppProviders queryClient={queryClient}>
         <DbSyncSetup />
-        <AppLayout>
-          <Outlet />
-        </AppLayout>
+        <AuthProvider>
+          <AppLayout>
+            <Outlet />
+          </AppLayout>
+        </AuthProvider>
       </AppProviders>
     </AppToolkitProvider>
   );

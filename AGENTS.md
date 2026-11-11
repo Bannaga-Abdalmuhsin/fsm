@@ -41,19 +41,16 @@ Before building common workspace or agent UI, read `agent-native-toolkit`; for s
 
 - Guarded verification: run `pnpm agent-native:doctor`; fix findings before done.
 
-## PMR operations
-FSM Performance Check: `/` scheduled work; `/orders/:id` field capture/results/review; `/checklists` source catalogue; `/review` active visits; `/settings` scoring/readiness. Navigation path includes the selected order ID. All times are UTC instants, displayed Asia/Riyadh. Provision roles only via the operator script after identity verification; never bootstrap the first signup as admin. Data inherits order access (assigned technician or scoped supervisor/admin). Photos require private blob storage; no public originals or SQL image bodies. Capture requires fresh accurate GPS reliably within 250 m and valid TCN; late offline upload does not change capture time. Browser GPS/camera metadata is device-reported, not attested. Functional checks need technician readings/tests. Never invent AI results: unavailable vision stays pending. Hard findings block acceptance. Existing WOs freeze checklist and scoring snapshots.
+## Native PMR workflow
 
-|Action|Purpose|
-|---|---|
-|get-pmr-dashboard|Role, authorized orders, readiness|
-|create-pmr-order|Schedule visit with TCN, site and equipment|
-|get-pmr-order|Read results, evidence and audit|
-|check-in-pmr|Validate site location/TCN|
-|save-pmr-result|Explicit ETL result/readings/TT/NOC|
-|manage-pmr-approval|Admin gallery exception|
-|review-pmr-evidence|Supervisor evidence decision and ETL links|
-|update-pmr-order|Submit/return/approve with completion gates|
-|save-pmr-policy|Publish scoring version for future WOs|
+`mobile/` is a separate native Expo app using Supabase JWT/RPCs, not Agent-Native web auth. Native mutations go through the named API helpers in `mobile/src/api.ts` and authoritative SQL workflow functions. Never route native PMR data to the legacy web database or ship a service key.
 
-The `preview/` entry is an explicitly labeled, isolated static demonstration of the same screens for GitHub Pages (`pnpm run build:pages` → `docs/`). Never enable it as production auth or connect it to operational records. Demo role changes and predefined findings are illustrative only. Rebuild `docs/` after changing preview code. Production action transport remains in `app/lib/pmr-actions.ts`.
+Primary operations: `pmr_membership`, `pmr_open_order`, `pmr_check_in`, `pmr_start_work`, `pmr_begin_capture`, `pmr_record_etl_result`, `pmr_submit_order`, `pmr_review_photo`, `pmr_review_result`, `pmr_review_order`, `pmr_grant_gallery_approval`, `pmr_set_team_member`, `pmr_promote_ready_schedules`, `pmr_save_quality_policy`. Photos use JWT-authenticated `evidence-ingest`; analysis retries use its JSON reanalyze operation. Preserve explicit pending/failed states. Release gates are in `docs/RELEASE_READINESS.md`.
+
+Remote admin tests use `pmr_create_admin_test` and the immutable `inventory.admin_test` marker. Never apply a test distance exception to an operational WO or hide test markings. Test orders cannot be submitted/approved.
+
+## Office PMR portal
+
+The web office portal shares the native Supabase JWT/RLS source of truth. Use named helpers in `app/lib/office-api.ts` and the corresponding Supabase RPCs; never copy operational data to the legacy Agent-Native database. `pmr_review_group` makes atomic, fingerprint/version-checked group decisions through existing independent photo/ETL review functions. `pmr_fsm_action` claims approved operational WOs and records actual manual stc upload references, or returns them to the RM. It does not automate stc entry. Admin-only `pmr_upsert_member` provisions existing Supabase Auth users with regions and exact team scopes. Core Approved means regional approval; `pmr_fsm_handoffs` distinguishes FSM work and actual stc upload. Test copies never enter operational handoff. Verify regional RLS, sequential reviews, pending QC rejection, FSM ownership and the work-order landing page.
+
+Photo submission verification: new native captures stay in draft until submitGroupEvidence releases a saved group. Never mark an upload complete without a matching registered receipt and readable pmr_evidence row. Photo explorer test scope is admin-only and must not enter operational KPIs or stc handoffs.
