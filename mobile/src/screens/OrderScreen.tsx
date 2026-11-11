@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   Pressable,
   ScrollView,
@@ -59,6 +59,9 @@ export function OrderScreen({
   onOrderChanged,
 }: Props) {
   const { t, rtl, locale } = useLanguage();
+  const overview = useRef<ComponentRef<typeof ScrollView>>(null);
+  const sectionOffsets = useRef<Record<string, number>>({});
+  const returnToSection = useRef<string | null>(null);
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [open, setOpen] = useState<string | null>(null),
@@ -168,8 +171,11 @@ export function OrderScreen({
     }
     await saveEquipmentGroup(order.id, g.id, checks, d.remarks, values, d.generatorState ?? null,
       records?.groups.find((r) => r.group_id === g.id)?.revision ?? 0);
-    await refresh();
+    returnToSection.current = category;
+    setOpen(null);
+    setCategory(null);
     setMessage(t("saved"));
+    await refresh();
     void submitGroupEvidence(order.assignee, order.id, g.id).then(refresh).catch(e => setMessage(e.message));
   }
   // Refresh on persisted queue transitions, including completion of background uploads.
@@ -190,8 +196,19 @@ export function OrderScreen({
   useEffect(() => {
     if (open && closedGroups.has(open)) setOpen(null);
   }, [records, uploads]);
+  useEffect(() => {
+    const section = returnToSection.current;
+    if (category !== null || section === null) return;
+    const frame = requestAnimationFrame(() => {
+      returnToSection.current = null;
+      const y = sectionOffsets.current[section];
+      if (y !== undefined) overview.current?.scrollTo({ y, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [category]);
   return (
     <ScrollView
+      ref={overview}
       style={s.root}
       contentContainerStyle={{
         paddingBottom: 70,
@@ -277,7 +294,8 @@ export function OrderScreen({
         if (!sectionGroups.length) return null;
         const expanded = category === name;
         return (
-          <View key={name} style={{ gap: 10 }}>
+          <View key={name} style={{ gap: 10 }}
+            onLayout={({ nativeEvent }) => { sectionOffsets.current[name] = nativeEvent.layout.y; }}>
             <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
               style={[s.card, s.row]} onPress={() => setCategory(expanded ? null : name)}>
               <Text style={[s.title, { flex: 1 }]}>{name}</Text>
