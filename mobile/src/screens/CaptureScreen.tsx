@@ -315,7 +315,7 @@ export function CaptureScreen({
         `GPS ${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)} ±${Math.round(fix.accuracy)} m`,
         `Site ${order.site_id} | WO ${order.wo ?? "pending"}`,
         `TCN ${order.tcn ?? "pending"}`,
-        `ETLs ${group.etls.map((e) => e.number).join(", ")} | ${group.id}`,
+        group.title,
         `Member ${email.split("@")[0]} | Team ${team}`,
       ];
       const ready = new Promise<void>((resolve) => {
@@ -406,7 +406,7 @@ export function CaptureScreen({
           {group.id} · {localizedGroupTitle(group.title, locale)}
         </Text>
         <Text style={styles.muted}>
-          {order.site_id} · ETLs {group.etls.map((e) => e.number).join(", ")}
+          {order.site_id} · {group.title}
         </Text>
         <Text style={styles.muted}>
           {clock

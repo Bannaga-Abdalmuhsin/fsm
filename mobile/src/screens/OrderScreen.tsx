@@ -15,12 +15,11 @@ import {
   setGeneratorCount,
   checkIn,
   startWork,
-  saveGroup,
+  saveEquipmentGroup,
   orderRecords,
   getOrder,
   submitOrder,
   type EtlStatus,
-  type Measurements,
   type Order,
 } from "../api";
 import {
@@ -35,19 +34,17 @@ import { getFix, measureClockOffset } from "../evidence";
 import { groupsFor, tcnWindowMissing, type EvidenceGroup } from "../domain";
 import { colors, fonts } from "../theme";
 import { localizedGroupTitle, useLanguage } from "../i18n";
+import { baseGroup, checkInEquipmentSection, equipmentCheckLabel, equipmentSections, readingLabels, requiredReadings } from "../equipmentChecks";
+const choices = [
+  ["Pass", "OK"], ["Fail", "Issue"], ["Not applicable", "N/A"], ["Not tested", "Not checked"],
+] as const;
 type Draft = {
-  status?: EtlStatus;
+  checks: Record<string, EtlStatus>;
+  generatorState?: string;
   remarks: string;
   values: Record<string, string>;
 };
-const empty = (): Draft => ({ remarks: "", values: {} });
-const fields = [
-  ["temperature_c", "temperature"],
-  ["dc_busbar_v", "dc"],
-  ["bbu_v", "bbu"],
-  ["ac_v", "ac"],
-] as const;
-const statuses: EtlStatus[] = ["Pass", "Fail", "Not applicable", "Not tested"];
+const empty = (): Draft => ({ checks: {}, remarks: "", values: {} });
 type Props = {
   order: Order;
   onBack: () => void;
@@ -66,8 +63,7 @@ export function OrderScreen({
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [open, setOpen] = useState<string | null>(null),
-    [details, setDetails] = useState<string | null>(null),
-    [measure, setMeasure] = useState<string | null>(null);
+    [category, setCategory] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({}),
     [ready, setReady] = useState(false),
     [records, setRecords] = useState<Awaited<
@@ -106,7 +102,8 @@ export function OrderScreen({
         const saved: Record<string, Draft> = {};
         for (const g of r.groups)
           saved[g.group_id] = {
-            status: g.status,
+            checks: g.field_checks ?? {},
+            generatorState: g.generator_state ?? undefined,
             remarks: g.remarks,
             values: Object.fromEntries(
               Object.entries(g.measurements).map(([k, v]) => [k, String(v)]),
@@ -160,24 +157,19 @@ export function OrderScreen({
   }
   async function save(g: EvidenceGroup) {
     const d = drafts[g.id] ?? empty();
-    if (!d.status) throw new Error(t("status"));
-    const values: Measurements = {};
-    for (const [key] of fields) {
-      const raw = d.values[key]?.trim();
-      if (raw) {
-        const n = Number(raw.replace(",", "."));
-        if (!Number.isFinite(n)) throw new Error(t("readingsHelp"));
+    const checks = d.checks ?? {};
+    const values: Record<string, number> = {};
+    const assessed = Object.values(checks).some((status) => status === "Pass" || status === "Fail");
+    if (assessed) {
+      for (const key of requiredReadings[baseGroup(g.id)] ?? []) {
+        const raw = d.values[key]?.trim();
+        const n = Number(raw?.replace(",", "."));
+        if (!raw || !Number.isFinite(n)) throw new Error(`Enter ${readingLabels[key]}.`);
         values[key] = n;
       }
     }
-    await saveGroup(
-      order.id,
-      g.id,
-      d.status,
-      d.remarks,
-      values,
-      records?.groups.find((r) => r.group_id === g.id)?.revision ?? 0,
-    );
+    await saveEquipmentGroup(order.id, g.id, checks, d.remarks, values, d.generatorState ?? null,
+      records?.groups.find((r) => r.group_id === g.id)?.revision ?? 0);
     await refresh();
     setMessage(t("saved"));
     void submitGroupEvidence(order.assignee, order.id, g.id).then(refresh).catch(e => setMessage(e.message));
@@ -282,7 +274,19 @@ export function OrderScreen({
           {message}
         </Text>
       ) : null}
-      {groups.map((g, i) => {
+      {equipmentSections.map(([name, ids]) => {
+        const sectionGroups = groups.filter((group) => ids.split(" ").includes(baseGroup(group.id)) && group.etls.some((check) => checkInEquipmentSection(group.id, check.number, name)));
+        if (!sectionGroups.length) return null;
+        const expanded = category === name;
+        return (
+          <View key={name} style={{ gap: 10 }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
+              style={[s.card, s.row]} onPress={() => setCategory(expanded ? null : name)}>
+              <Text style={[s.title, { flex: 1 }]}>{name}</Text>
+              <Text style={s.muted}>{sectionGroups.filter((group) => closedGroups.has(group.id)).length}/{sectionGroups.length}</Text>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
+            </Pressable>
+            {expanded && sectionGroups.map((g) => {
         const d = drafts[g.id] ?? empty(),
           saved = records?.groups.find((r) => r.group_id === g.id),
           photos =
@@ -314,9 +318,6 @@ export function OrderScreen({
               accessibilityState={{ expanded: isOpen }}
               style={s.row}
             >
-              <View style={s.number}>
-                <Text style={s.link}>{String(i + 1).padStart(2, "0")}</Text>
-              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.title}>
                   {localizedGroupTitle(g.title, locale)}
@@ -414,116 +415,64 @@ export function OrderScreen({
                       onPress={() => onGallery(g, a.id)}
                     />
                   ))}
-                <Text style={s.label}>{t("status")}</Text>
-                <View style={s.statuses}>
-                  {statuses.map((status) => (
-                    <Pressable
-                      key={status}
-                      disabled={!editable || busy}
-                      onPress={() => patch(g.id, { status })}
-                      accessibilityRole="radio"
-                      accessibilityState={{
-                        checked: d.status === status,
-                        disabled: !editable,
-                      }}
-                      style={[
-                        s.status,
-                        d.status === status && {
-                          backgroundColor:
-                            status === "Pass"
-                              ? "#087D49"
-                              : status === "Fail"
-                                ? "#BC343A"
-                                : status === "Not tested"
-                                  ? "#986200"
-                                  : "#596A77",
-                          borderColor: "transparent",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color:
-                            d.status === status
-                              ? colors.actionInk
-                              : colors.foreground,
-                          fontWeight: "600",
-                        }}
-                      >
-                        {t(status)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  editable={editable && !busy}
-                  accessibilityLabel={t("remarks")}
-                  placeholder={`${t("remarks")} · ${t("optional")}`}
-                  placeholderTextColor={colors.muted}
-                  value={d.remarks}
-                  onChangeText={(remarks) => patch(g.id, { remarks })}
-                  multiline
-                  maxLength={2000}
-                  style={[
-                    s.input,
-                    { minHeight: 72, textAlign: rtl ? "right" : "left" },
-                  ]}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  style={s.back}
-                  onPress={() => setMeasure(measure === g.id ? null : g.id)}
-                >
-                  <Text style={s.link}>
-                    ＋ {t("measurements")} · {t("optional")}
-                  </Text>
-                </Pressable>
-                {measure === g.id ? (
-                  <View style={{ gap: 10 }}>
-                    <Text style={s.muted}>{t("readingsHelp")}</Text>
-                    {fields.map(([key, label]) => (
-                      <View key={key}>
-                        <Text style={s.label}>{t(label)}</Text>
-                        <TextInput
-                          editable={editable && !busy}
-                          accessibilityLabel={t(label)}
-                          value={d.values[key] ?? ""}
-                          onChangeText={(value) =>
-                            patch(g.id, {
-                              values: { ...d.values, [key]: value },
-                            })
-                          }
-                          inputMode="decimal"
-                          maxLength={12}
-                          style={s.input}
-                        />
-                      </View>
-                    ))}
+                {["O09", "S16"].includes(baseGroup(g.id)) && (
+                  <View style={{ gap: 6 }}>
+                    <Text style={s.label}>Generator operating status</Text>
+                    <View style={s.statuses}>
+                      {["Running", "Standby", "Fault", "Not checked"].map((state) => (
+                        <Pressable key={state} disabled={!editable || busy} accessibilityRole="radio"
+                          accessibilityState={{ checked: d.generatorState === state }}
+                          style={[s.status, d.generatorState === state && { backgroundColor: colors.action }]}
+                          onPress={() => patch(g.id, { generatorState: state })}>
+                          <Text style={{ color: d.generatorState === state ? colors.actionInk : colors.foreground }}>{state}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
                   </View>
-                ) : null}
-                <Button
-                  label={t("submitGroup")}
-                  disabled={busy || !editable || !d.status}
-                  onPress={() => void run(() => save(g))}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  style={s.back}
-                  onPress={() => setDetails(details === g.id ? null : g.id)}
-                >
-                  <Text style={s.link}>
-                    {t("details")} · {g.etls.length}
-                  </Text>
-                </Pressable>
-                {details === g.id
-                  ? g.etls.map((e) => (
-                      <Text key={e.code} style={s.muted}>
-                        {e.number}. {e.description}
-                      </Text>
-                    ))
-                  : null}
+                )}
+                {g.etls.filter((check) => checkInEquipmentSection(g.id, check.number, name)).map((check) => (
+                  <View key={check.code} style={{ gap: 6 }}>
+                    <Text style={s.label}>{equipmentCheckLabel(check.description)}</Text>
+                    <View style={s.statuses}>
+                      {choices.map(([status, label]) => {
+                        const selected = d.checks?.[check.code] === status;
+                        return (
+                          <Pressable key={status} disabled={!editable || busy}
+                            accessibilityRole="radio" accessibilityState={{ checked: selected }}
+                            style={[s.status, selected && { backgroundColor: colors.action }]}
+                            onPress={() => patch(g.id, { checks: { ...d.checks, [check.code]: status } })}>
+                            <Text style={{ color: selected ? colors.actionInk : colors.foreground }}>{label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+                {Object.values(d.checks ?? {}).some((status) => status === "Pass" || status === "Fail") &&
+                  (requiredReadings[baseGroup(g.id)] ?? []).map((key) => (
+                    <View key={key}>
+                      <Text style={s.label}>{readingLabels[key]}</Text>
+                      <TextInput editable={editable && !busy} accessibilityLabel={readingLabels[key]}
+                        value={d.values[key] ?? ""} inputMode="decimal" maxLength={12} style={s.input}
+                        onChangeText={(value) => patch(g.id, { values: { ...d.values, [key]: value } })} />
+                    </View>
+                  ))}
+                <TextInput editable={editable && !busy} accessibilityLabel={t("remarks")}
+                  placeholder="Remarks (required for Issue or Not checked)"
+                  placeholderTextColor={colors.muted} value={d.remarks}
+                  onChangeText={(remarks) => patch(g.id, { remarks })}
+                  multiline maxLength={2000} style={[s.input, { minHeight: 72 }]} />
+                {g.etls.some((check) => !checkInEquipmentSection(g.id, check.number, name) && !d.checks?.[check.code]) && (
+                  <Text style={s.muted}>Complete the related checks in the other equipment section to save these shared photos.</Text>
+                )}
+                <Button label={t("submitGroup")}
+                  disabled={busy || !editable || g.etls.some((check) => !d.checks?.[check.code])}
+                  onPress={() => void run(() => save(g))} />
               </View>
             ) : null}
+          </View>
+        );
+      })}
           </View>
         );
       })}

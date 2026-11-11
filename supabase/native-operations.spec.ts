@@ -16,7 +16,7 @@ beforeAll(async()=>{
  db=await PGlite.create({extensions:{pgcrypto}});await db.exec(template('supabaseStubs'));await db.exec(template('referenceTables'));await db.exec('alter table storage.buckets add column file_size_limit bigint, add column allowed_mime_types text[]');
  await db.exec(`create table public.pmr_sites(site_id text primary key,location text,latitude float8,longitude float8,site_status text,site_type text,vendor text,region text,district text,source_id text,source_row int,refreshed_at timestamptz,validation_errors jsonb);
  create table public.pmr_schedule_rows(source_id text,sync_id uuid,source_tab text,source_row int,site_id text,region text,district text,scheduled_date date,tcn_number text,tcn_time text,team_name text,supervisor_name text,raw jsonb,state text default 'draft',validation_errors jsonb default '[]',order_id text,synced_at timestamptz default now(),site_reference jsonb,primary key(source_id,sync_id));`);
- for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql','./migrations/20261103083112_office_workflow_fsm_handoff.sql','./migrations/20261103095804_national_work_order_catalogue.sql','./migrations/20261104120000_pmr_group_photo_minimums.sql','./migrations/20261104120100_pmr_assignment_push.sql'])await db.exec(sql(file).replaceAll("user_id uuid","user_id text"));
+ for(const file of ['./rls.sql','./migrations/0002_pmr_roles_scopes_ingest.sql','./migrations/0003_native_operations.sql','./migrations/0004_schedule_promotion.sql','./checklist-catalogue.sql','./migrations/20261102074756_generator_instances.sql','./migrations/20261102102453_admin_remote_test.sql','./migrations/20261102115601_simple_group_submissions_profiles_export.sql','./migrations/20261102123620_signed_dc_measurements.sql','./migrations/20261103083112_office_workflow_fsm_handoff.sql','./migrations/20261103095804_national_work_order_catalogue.sql','./migrations/20261104120000_pmr_group_photo_minimums.sql','./migrations/20261104120100_pmr_assignment_push.sql','./migrations/20261111120000_pmr_equipment_checks.sql'])await db.exec(sql(file).replaceAll("user_id uuid","user_id text"));
  await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('a','admin@test','org','admin','["CR"]','[]'),('t','tech@test','org','technician','["CR"]','[]'),('l','lead@test','org','team_leader','["CR"]','["Team"]'),('r','rm@test','org','regional_manager','["CR"]','[]');`);
  await db.query(`insert into public.pmr_orders(id,owner_email,org_id,site_id,site_type,region,team,assignee,wo,tcn,month,latitude,longitude,scheduled_start,scheduled_end,tcn_start,tcn_end,inventory,checklist,policy,created_at,updated_at) values('wo','admin@test','org','SITE','ODU','CR','Team','tech@test','WO1','TCN1','2026-11',24.7,46.7,$1,$2,$1,$2,'{}',$3,$4,$1,$1)`,[start,end,JSON.stringify(checklists.ODU),JSON.stringify(defaultPolicy)]);
 },60000);
@@ -139,6 +139,24 @@ await expect(db.query("select public.pmr_open_order($1,$2)",[test.id,JSON.string
   }
   await as('tech@test');await db.exec("select public.pmr_submit_order('simple-wo',3)");
   await as('lead@test');await expect(db.exec("select public.pmr_review_photo('pending-photo',3,'approved','')")).rejects.toThrow();
+ });
+ it('saves individual equipment results and enforces mandatory readings', async () => {
+  await admin();
+  const group = checklists.ODU.find((g) => g.id === 'O08')!;
+  await db.query("insert into public.pmr_orders select (jsonb_populate_record(null::public.pmr_orders,to_jsonb(o)||$1::jsonb)).* from public.pmr_orders o where id='wo'",
+   [JSON.stringify({id:'equipment-wo',wo:'equipmentWO',checklist:[group],status:'In progress',version:3})]);
+  const checks = Object.fromEntries(group.etls.map((check, i) => [check.code, i === 0 ? 'Pass' : 'Fail']));
+  await as('tech@test');
+  const save = (readings: string, remarks: string, revision = 0) =>
+   db.query("select public.pmr_save_equipment_group('equipment-wo','O08',$1,$2,$3,null,$4)",
+    [JSON.stringify(checks), remarks, readings, revision]);
+  await expect(save('{}', 'Exhaust leak')).rejects.toThrow(/required equipment readings/);
+  await expect(save('{"fuel_pct":60}', '')).rejects.toThrow(/Add remarks/);
+  await save('{"fuel_pct":60}', 'Exhaust leak');
+  const rows = (await db.query<{etl_code:string;status:string}>(
+   "select etl_code,status from public.pmr_results where order_id='equipment-wo'")).rows;
+  expect(Object.fromEntries(rows.map((row) => [row.etl_code, row.status]))).toEqual(checks);
+  await expect(save('{"fuel_pct":60}', 'Exhaust leak')).rejects.toThrow(/Group changed/);
  });
  it('enforces FSM region scope, regional approval and ownership before recording a real stc reference',async()=>{
   await admin();await db.exec(`insert into public.pmr_members(id,owner_email,org_id,role,regions,teams) values('fsm','fsm@test','org','fsm_team','["CR"]','[]'),('fsm2','fsm2@test','org','fsm_team','["ER"]','[]');`);

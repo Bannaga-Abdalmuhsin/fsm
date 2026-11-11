@@ -208,11 +208,18 @@ export async function createAdminTest(order: Order) {
  return data as Order;
 }
 
-export type GroupSubmission = { order_id:string; group_id:string; status:EtlStatus; remarks:string; measurements:Measurements; revision:number };
+export type GroupSubmission = { order_id:string; group_id:string; status:EtlStatus; remarks:string; measurements:Record<string, number>; revision:number; field_checks?: Record<string, EtlStatus>; generator_state?: string | null };
 export type Measurements = Partial<Record<"temperature_c"|"dc_busbar_v"|"bbu_v"|"ac_v",number>>;
-export async function saveGroup(orderId:string,groupId:string,status:EtlStatus,remarks:string,measurements:Measurements,revision:number) {
- const {data,error}=await client().rpc("pmr_save_group",{p_order:orderId,p_group:groupId,p_status:status,p_remarks:remarks,p_measurements:measurements,p_revision:revision});
- if(error)throw new Error(error.message);return data as GroupSubmission;
+export async function saveEquipmentGroup(
+  orderId: string, groupId: string, checks: Record<string, EtlStatus>, remarks: string,
+  measurements: Record<string, number>, generatorState: string | null, revision: number,
+) {
+  const { data, error } = await client().rpc("pmr_save_equipment_group", {
+    p_order: orderId, p_group: groupId, p_checks: checks,
+    p_remarks: remarks, p_measurements: measurements, p_generator_state: generatorState, p_revision: revision,
+  });
+  if (error) throw new Error(error.message);
+  return data as GroupSubmission;
 }
 export type Profile = { name:string; mobile:string; locale:import("./i18n").Locale; avatar_path:string|null };
 export async function loadProfile() {
