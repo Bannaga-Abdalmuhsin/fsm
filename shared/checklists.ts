@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 18689)
+Total output lines: 1920
+
 export type Etl = {
   number: number;
   code: string;
@@ -5,7 +8,7 @@ export type Etl = {
   source: string;
   requiresClarification: boolean;
 };
-export type EvidenceGroup = { id: string; title: string; etls: Etl[]; required_photos?: number };
+export type EvidenceGroup = { id: string; title: string; etls: Etl[]; required_photos?: number; photoSlot?: string };
 export const checklistVersion = 1;
 export const checklists: Record<"ODU" | "SHELTER", EvidenceGroup[]> = {
   ODU: [
@@ -1014,67 +1017,7 @@ export const checklists: Record<"ODU" | "SHELTER", EvidenceGroup[]> = {
           description:
             "COW_MONTHLY_ONSITE_45   COW-ELECTRICAL DISTRIBUTION PANEL / MDB - Check Cable Overheating.",
           source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 46,
-          code: "COW_MONTHLY_ONSITE_46",
-          description:
-            "COW_MONTHLY_ONSITE_46   COW-ELECTRICAL DISTRIBUTION PANEL / MDB - Check whether single line diagram   available and labelling of switches and circuits.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 47,
-          code: "COW_MONTHLY_ONSITE_47",
-          description:
-            "COW_MONTHLY_ONSITE_47   COW-ELECTRICAL DISTRIBUTION PANEL / MDB- Check  Breaker Condition of Contacts, and wiring   to power sources and professional connections and safety standards observed.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 48,
-          code: "COW_MONTHLY_ONSITE_48",
-          description:
-            "COW_MONTHLY_ONSITE_48   COW-ELECTRICAL DISTRIBUTION PANEL / MDB -Check general condition of   MCB/MDB,  clean the internal and   external parts of the panel. Switches and ensure the MDB cover is available   and securely latched.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-      ],
-    },
-    {
-      id: "S10",
-      title: "External & tower",
-      etls: [
-        {
-          number: 49,
-          code: "COW_MONTHLY_ONSITE_49",
-          description:
-            "COW_MONTHLY_ONSITE_49   COW-EXTERNAL - Check for any rust and depth of the rust. Deploy any rust   removal and protection for any metal surface degradation. Perform any   required paint work.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 51,
-          code: "COW_MONTHLY_ONSITE_51",
-          description:
-            "COW_MONTHLY_ONSITE_51   COW-EXTERNAL - Check for the presence of guy wires, in the right number and   stability and the quality of the anchoring on the ground.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 52,
-          code: "COW_MONTHLY_ONSITE_52",
-          description:
-            "COW_MONTHLY_ONSITE_52   COW-EXTERNAL - Check for the presence of the ladder and it is in good   condition for access to doors.",
-          source: "user-provided original checklist",
-          requiresClarification: false,
-        },
-        {
-          number: 53,
-          code: "COW_MONTHLY_ONSITE_53",
-          description:
-            "COW_MONTHLY_ONSITE_53   COW-EXTERNAL - Check for the stability and the erection base of the tower and   check for any possible damages to the mechanical base and the mechanism, and   ensure all functionality is maintained.",
+          requir…689 tokens truncated…ism, and   ensure all functionality is maintained.",
           source: "user-provided original checklist",
           requiresClarification: false,
         },

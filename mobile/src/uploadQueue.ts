@@ -9,6 +9,7 @@ export type LocalEvidence = {
   orderId: string;
   siteId: string;
   groupId: string;
+  photoSlot?: string;
   linkedEtls: number[];
   technician: string;
   team: string;
@@ -90,10 +91,11 @@ async function save(row: LocalEvidence) {
   for (const listener of listeners) listener(row.technician);
 }
 // Only the explicit group submission releases newly captured local drafts.
-export async function submitGroupEvidence(email: string, orderId: string, groupId: string, linkedEtls?: number[]) {
+export async function submitGroupEvidence(email: string, orderId: string, groupId: string, linkedEtls?: number[], photoSection?: string) {
   for (const row of await queuedEvidence(email)) {
     if (!row.supersededBy && row.orderId === orderId && row.groupId === groupId && row.uploadState === "draft" &&
-      (!linkedEtls || linkedEtls.every((number) => row.linkedEtls.includes(number))))
+      (!linkedEtls || linkedEtls.every((number) => row.linkedEtls.includes(number))) &&
+      (!photoSection || row.photoSlot?.startsWith(`${photoSection}/`)))
       await save({...row, uploadState: "queued", nextAttemptAt: 0});
   }
   await retryEvidence(email, groupId, orderId);

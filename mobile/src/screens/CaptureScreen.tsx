@@ -360,6 +360,7 @@ export function CaptureScreen({
         wo: order.wo,
         tcn: order.tcn,
         groupId: group.id,
+        photoSlot: group.photoSlot,
         linkedEtls: group.etls.map((e) => e.number),
         technician: email,
         team,
@@ -403,7 +404,7 @@ export function CaptureScreen({
     <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.heading}>
-          {group.id} · {localizedGroupTitle(group.title, locale)}
+          {localizedGroupTitle(group.title, locale)}
         </Text>
         <Text style={styles.muted}>
           {order.site_id} · {group.title}

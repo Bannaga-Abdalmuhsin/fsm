@@ -1,3 +1,4 @@
+import { photoChecklist } from "../photoChecklist";
 import { useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   Pressable,
@@ -8,7 +9,6 @@ import {
   View,
 } from "react-native";
 import { groupPhotoState, isGroupClosed } from "../groupPhotoState";
-import { requiredGroupPhotos } from "../../../shared/checklists";
 import { File, Paths } from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -54,6 +54,14 @@ function checksForSection(group: EvidenceGroup, section: string) {
   return group.etls.filter((check) => checkInEquipmentSection(group.id, check.number, section));
 }
 
+function namedPhotosFor(group: EvidenceGroup, section: string) {
+  return (photoChecklist[section] ?? []).filter(([, ids]) => ids.split(" ").includes(baseGroup(group.id)));
+}
+
+function sectionPhotoMinimum(group: EvidenceGroup, section: string) {
+  return Math.max(1, namedPhotosFor(group, section).length);
+}
+
 function sectionPhotoState(group: EvidenceGroup, section: string, uploads: LocalEvidence[], evidence: Awaited<ReturnType<typeof orderRecords>>["evidence"]) {
   const numbers = checksForSection(group, section).map((check) => check.number);
   return groupPhotoState(group.id,
@@ -65,12 +73,12 @@ function sectionPhotoState(group: EvidenceGroup, section: string, uploads: Local
 function sectionComplete(group: EvidenceGroup, section: string, saved: GroupSubmission | undefined,
   uploads: LocalEvidence[], evidence: Awaited<ReturnType<typeof orderRecords>>["evidence"]) {
   if (!saved?.field_checks) {
-    return isGroupClosed(saved?.status, requiredGroupPhotos(group), sectionPhotoState(group, section, uploads, evidence));
+    return isGroupClosed(saved?.status, sectionPhotoMinimum(group, section), sectionPhotoState(group, section, uploads, evidence));
   }
   const statuses = checksForSection(group, section).map((check) => saved.field_checks?.[check.code]);
   if (!statuses.length || statuses.some((status) => !status)) return false;
   const status = statuses.some((value) => value === "Pass" || value === "Fail") ? "Pass" : "Not tested";
-  return isGroupClosed(status, requiredGroupPhotos(group), sectionPhotoState(group, section, uploads, evidence));
+  return isGroupClosed(status, sectionPhotoMinimum(group, section), sectionPhotoState(group, section, uploads, evidence));
 }
 type Props = {
   order: Order;
@@ -209,9 +217,7 @@ export function OrderScreen({
     }
     await saveEquipmentGroup(order.id, g.id, checks, d.sectionRemarks?.[section] ?? d.remarks, values, d.generatorState ?? null,
       records?.groups.find((r) => r.group_id === g.id)?.revision ?? 0);
-    returnToSection.current = section;
     setOpen(null);
-    setCategory(null);
     setMessage(t("saved"));
     await refresh();
     void submitGroupEvidence(order.assignee, order.id, g.id, visibleChecks.map((check) => check.number)).then(refresh).catch(e => setMessage(e.message));
@@ -230,17 +236,16 @@ export function OrderScreen({
   );
   const closedGroups = new Set(groups.filter((group) => isGroupClosed(
     completeGroupStatus(group, records?.groups.find((result) => result.group_id === group.id)),
-    requiredGroupPhotos(group),
+    1,
     groupPhotoState(group.id, uploads, records?.evidence ?? []),
   )).map((group) => group.id));
   const complete = closedGroups.size;
   useEffect(() => {
     const section = returnToSection.current;
-    if (category !== null || section === null) return;
+    if (category === null && section === null) return;
     const frame = requestAnimationFrame(() => {
       returnToSection.current = null;
-      const y = sectionOffsets.current[section];
-      if (y !== undefined) overview.current?.scrollTo({ y, animated: false });
+      overview.current?.scrollTo({ y: (section === null ? 0 : sectionOffsets.current[section]) ?? 0, animated: false });
     });
     return () => cancelAnimationFrame(frame);
   }, [category]);
@@ -255,6 +260,15 @@ export function OrderScreen({
       }}
       keyboardShouldPersistTaps="handled"
     >
+      {category !== null && (
+        <View style={s.row}>
+          <Pressable onPress={() => { returnToSection.current = category; setOpen(null); setCategory(null); }} style={s.back} accessibilityRole="button">
+            <Text style={s.link}>‹ Equipment</Text>
+          </Pressable>
+          <Text style={s.title}>{category}</Text>
+        </View>
+      )}
+      {category === null && (<>
       <Pressable onPress={onBack} style={s.back} accessibilityRole="button">
         <Text style={s.link}>‹ {t("back")}</Text>
       </Pressable>
@@ -322,26 +336,63 @@ export function OrderScreen({
           onPress={() => void run(start)}
         />
       ) : null}
+      </>)}
       {message ? (
         <Text accessibilityLiveRegion="polite" style={s.notice}>
           {message}
         </Text>
       ) : null}
+      {category !== null && (photoChecklist[category] ?? []).flatMap(([label, groupIds]) =>
+        groups.filter((group) => groupIds.split(" ").includes(baseGroup(group.id))).map((group) => {
+          const slot = `${category}/${label}`;
+          const captures = uploads.filter((photo) => photo.groupId === group.id && photo.photoSlot === slot && !photo.supersededBy);
+          const captured = captures[captures.length - 1];
+          const remote = records?.evidence.find((photo) => photo.id === captured?.evidenceId);
+          const retake = captured?.uploadState === "blocked" || remote?.state === "Retake required";
+          const done = captured && !retake;
+          return (
+            <View key={`${group.id}/${slot}`} style={[s.card, done && { backgroundColor: "#DDF5E6", borderColor: "#159257" }]}>
+              <Text style={s.title}>{label}{group.id.includes("_GEN") ? ` · Generator ${group.id.split("_GEN")[1]}` : ""}</Text>
+              {done ? <Text style={s.muted}>{t(remote ? "photoUploaded" : "photoTaken")}</Text> : (
+                <Button icon="camera-outline" label={t(retake ? "recapture" : "capture")}
+                  disabled={busy || !editable || !ready}
+                  onPress={() => onCapture({ ...group, title: label, photoSlot: slot, etls: checksForSection(group, category).length ? checksForSection(group, category) : group.etls })} />
+              )}
+            </View>
+          );
+        }),
+      )}
+      {category === null && ["BATP", "Site info", "Fuel", "Telecom racks"].map((name) =>
+        (photoChecklist[name] ?? []).some(([, ids]) => groups.some((group) => ids.split(" ").includes(baseGroup(group.id)))) && (
+          <Pressable key={name} accessibilityRole="button" style={[s.card, s.row]} onPress={() => setCategory(name)}>
+            <Text style={[s.title, { flex: 1 }]}>{name}</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Pressable>
+        ))}
+      {category !== null && ["BATP", "Site info", "Fuel", "Telecom racks"].includes(category) && (
+        <Button label={t("submitPhoto")} disabled={busy || !editable || !ready} onPress={() => void run(async () => {
+          for (const group of groups) {
+            if (uploads.some((photo) => photo.groupId === group.id && photo.photoSlot?.startsWith(`${category}/`) && photo.uploadState === "draft"))
+              await submitGroupEvidence(order.assignee, order.id, group.id, undefined, category);
+          }
+          await refresh();
+        })} />
+      )}
       {equipmentSections.map(([name, ids]) => {
         const sectionGroups = groups.filter((group) => ids.split(" ").includes(baseGroup(group.id)) && group.etls.some((check) => checkInEquipmentSection(group.id, check.number, name)));
-        if (!sectionGroups.length) return null;
+        if (!sectionGroups.length || (category !== null && category !== name)) return null;
         const expanded = category === name;
         return (
           <View key={name} style={{ gap: 10 }}
             onLayout={({ nativeEvent }) => { sectionOffsets.current[name] = nativeEvent.layout.y; }}>
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
+            {!expanded && <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
               style={[s.card, s.row]} onPress={() => setCategory(expanded ? null : name)}>
               <Text style={[s.title, { flex: 1 }]}>{name}</Text>
               <Text style={s.muted}>{sectionGroups.filter((group) =>
                 sectionComplete(group, name, records?.groups.find((result) => result.group_id === group.id),
                   uploads, records?.evidence ?? [])).length}/{sectionGroups.length}</Text>
               <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.muted} />
-            </Pressable>
+            </Pressable>}
             {expanded && sectionGroups.map((g) => {
         const d = drafts[g.id] ?? empty(),
           saved = records?.groups.find((r) => r.group_id === g.id),
@@ -360,7 +411,7 @@ export function OrderScreen({
             .map((e) => ({ id: e.evidenceId, state: e.uploadState === "blocked" ? "Retake required" : e.uploadState })),
         ];
         const closed = sectionComplete(g, name, saved, uploads, records?.evidence ?? []);
-        const minimum = requiredGroupPhotos(g);
+        const minimum = sectionPhotoMinimum(g, name);
         const sectionStatuses = sectionGroup.etls.map((check) => saved?.field_checks?.[check.code]);
         const sectionStatus = !saved?.field_checks ? saved?.status
           : sectionStatuses.some((status) => !status) ? undefined
@@ -409,7 +460,7 @@ export function OrderScreen({
             {isOpen ? (
               <View style={{ gap: 14 }}>
                 <View style={{ gap: 8 }}>
-                  {Array.from({ length: Math.max(minimum, sectionPhotos.length) }, (_, index) => {
+                  {Array.from({ length: namedPhotosFor(g, name).length ? 0 : Math.max(minimum, sectionPhotos.length) }, (_, index) => {
                     const captured = sectionPhotos[index];
                     const needsRetake = captured?.state === "Retake required";
                     return (
@@ -422,6 +473,10 @@ export function OrderScreen({
                       </Pressable>
                     );
                   })}
+                  {namedPhotosFor(g, name).length > 0 && (photo.retakeRequired || photo.requiresRetake) && (
+                    <Button icon="camera-outline" label={t("recapture")} disabled={busy || !editable || !ready}
+                      onPress={() => onCapture(photos.some((e) => e.state === "Retake required" && e.linked_etls.length > sectionNumbers.length) ? g : sectionGroup)} />
+                  )}
                   {photo.failed ? <Text style={s.error}>{photo.pending.find((e) => e.lastError)?.lastError}</Text> : null}
                 </View>
                 {photos.filter((e) => inSection(e.linked_etls)).map((e) => (
@@ -515,7 +570,7 @@ export function OrderScreen({
           </View>
         );
       })}
-      {order.status === "In progress" && !order.inventory?.admin_test ? (
+      {category === null && order.status === "In progress" && !order.inventory?.admin_test ? (
         <Button
           label={t("submit")}
           disabled={busy || !ready}
@@ -525,7 +580,7 @@ export function OrderScreen({
               const { latestRecords, latestUploads } = await refresh();
               const readyToSubmit = groups.length > 0 && groups.every((group) => isGroupClosed(
                 completeGroupStatus(group, latestRecords.groups.find((result) => result.group_id === group.id)),
-                requiredGroupPhotos(group),
+                1,
                 groupPhotoState(group.id, latestUploads, latestRecords.evidence),
               ));
               const equipmentReady = equipmentSections.every(([name, ids]) => groups

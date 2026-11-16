@@ -22,7 +22,7 @@ export function baseGroup(id: string) {
 
 export function equipmentCheckLabel(description: string) {
   return description
-    .replace(/^COW_(?:ODU_)?MONTHLY_(?:ONSITE_)?\d+\s*/i, "")
+    .replace(/^COW[ _](?:ODU_)?MONTHLY_(?:ONSITE_)?\d+\s*/i, "")
     .replace(/^COW\s*-\s*/i, "")
     .replace(/^(?:BACKUP\s+BATTERY|EXTERNAL|INTERNAL|TRUCK|GENERATOR|FIRE PROTECTION|HVAC\s+PANEL|RECTIFIERS?(?:\s+and\s+DC\s+plant)?)\s*[-:]\s*/i, "")
     .replace(/\bETLs?\b/gi, "checks")
